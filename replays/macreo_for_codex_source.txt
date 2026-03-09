@@ -1,0 +1,35 @@
+{
+  "mode": "timeline",
+  "commands": [
+    { "type": "mousemove", "at": "1250ms", "duration": "625ms", "direction": "right", "speed": 2240 },
+    { "type": "mousemove", "at": "5000ms", "duration": "625ms", "direction": "left", "speed": 2240 },
+
+    { "type": "mousemove", "at": "8750ms", "duration": "625ms", "direction": "up", "speed": 1920 },
+    { "type": "mousemove", "at": "11250ms", "duration": "625ms", "direction": "down", "speed": 1920 },
+
+    { "type": "holdkey", "key": "w", "at": "15000ms", "duration": "625ms" },
+    { "type": "holdkey", "key": "a", "at": "17500ms", "duration": "625ms" },
+    { "type": "holdkey", "key": "d", "at": "20000ms", "duration": "625ms" },
+
+    { "type": "holdkey", "key": "w", "at": "22500ms", "duration": "625ms" },
+    { "type": "mousemove", "at": "22500ms", "duration": "625ms", "direction": "right", "speed": 2240 },
+
+    { "type": "holdkey", "key": "w", "at": "25000ms", "duration": "625ms" },
+    { "type": "mousemove", "at": "25000ms", "duration": "625ms", "direction": "left", "speed": 2240 },
+
+    { "type": "holdkey", "keys": ["w", "a"], "at": "27500ms", "duration": "125ms" },
+    { "type": "holdkey", "keys": ["w", "d"], "at": "28000ms", "duration": "125ms" },
+    { "type": "holdkey", "keys": ["w", "a"], "at": "28500ms", "duration": "125ms" },
+    { "type": "holdkey", "keys": ["w", "d"], "at": "29000ms", "duration": "125ms" },
+    { "type": "holdkey", "keys": ["w", "a"], "at": "29500ms", "duration": "125ms" },
+
+    { "type": "holdkey", "key": "w", "at": "30000ms", "duration": "625ms" },
+    { "type": "mousemove", "at": "30000ms", "duration": "625ms", "direction": "right", "speed": 960 },
+
+    { "type": "holdkey", "keys": ["ctrl", "w"], "at": "33750ms", "duration": "125ms" },
+    { "type": "holdkey", "key": "w", "at": "34250ms", "duration": "125ms" },
+    { "type": "holdkey", "keys": ["shift", "w"], "at": "34750ms", "duration": "125ms" },
+
+    { "type": "holdmouse", "button": "left", "at": "35750ms", "duration": "125ms" }
+  ]
+}
