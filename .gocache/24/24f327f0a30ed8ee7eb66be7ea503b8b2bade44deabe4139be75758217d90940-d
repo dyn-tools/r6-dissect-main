@@ -1,0 +1,4 @@
+./helpers_test.go
+./operator_roles_test.go
+./operators_missing_test.go
+./reader_test.go

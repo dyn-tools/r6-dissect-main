@@ -1,0 +1,32 @@
+=== RUN   TestProbeY11R03PropCandidates
+{"level":"debug","chunkedCompression (>=Y8S4)":true,"time":"2026-03-07T20:31:40+01:00"}
+{"level":"debug","time":"2026-03-07T20:31:40+01:00","message":"reading data"}
+{"level":"debug","time":"2026-03-07T20:31:40+01:00","message":"reading header magic"}
+{"level":"debug","time":"2026-03-07T20:31:40+01:00","message":"reading header"}
+{"level":"debug","time":"2026-03-07T20:31:40+01:00","message":"decompressing data"}
+{"level":"debug","zstd_sections":117,"time":"2026-03-07T20:31:40+01:00"}
+{"level":"debug","size":55303269,"time":"2026-03-07T20:31:40+01:00"}
+{"level":"debug","season":"Y11S1_Alpha03","code":9540659,"time":"2026-03-07T20:31:40+01:00"}
+prop=00000000257100f000000000 rawScore=3303466 samples=5195 actors=140 strong=33 topActor=3466 quality={long=15 balanced=12 merged=816 pos=498 rot=318} spread=0.00 top=[]
+prop=00000000d77e00f000000000 rawScore=3202843 samples=4517 actors=211 strong=32 topActor=2843 quality={long=0 balanced=0 merged=2 pos=2 rot=0} spread=0.00 top=[]
+prop=00000000c97100f000000000 rawScore=2903565 samples=4908 actors=201 strong=29 topActor=3565 quality={long=4 balanced=5 merged=371 pos=126 rot=245} spread=0.00 top=[]
+prop=00000000f77e00f000000000 rawScore=2702655 samples=3748 actors=131 strong=27 topActor=2655 quality={long=0 balanced=0 merged=5 pos=5 rot=0} spread=0.00 top=[]
+prop=00000000497900f000000000 rawScore=2602817 samples=4369 actors=163 strong=26 topActor=2817 quality={long=0 balanced=0 merged=2 pos=2 rot=0} spread=0.00 top=[]
+prop=00000000eb6900f000000000 rawScore=1902678 samples=3459 actors=135 strong=19 topActor=2678 quality={long=3 balanced=1 merged=160 pos=24 rot=136} spread=0.00 top=[]
+prop=00000000f95c00f000000000 rawScore=1800929 samples=1421 actors=49 strong=18 topActor=929 quality={long=0 balanced=0 merged=39 pos=39 rot=0} spread=0.00 top=[]
+prop=00000000ea6600f000000000 rawScore=1601960 samples=2587 actors=111 strong=16 topActor=1960 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[]
+prop=00000000c05900f000000000 rawScore=1401950 samples=2446 actors=93 strong=14 topActor=1950 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[]
+prop=00000000888701f000000000 rawScore=1400795 samples=1081 actors=39 strong=14 topActor=795 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[]
+prop=00000000946400f000000000 rawScore=1302457 samples=2785 actors=100 strong=13 topActor=2457 quality={long=12 balanced=4 merged=2064 pos=1920 rot=144} spread=0.00 top=[]
+prop=00000000d78401f000000000 rawScore=1302288 samples=2689 actors=130 strong=13 topActor=2288 quality={long=4 balanced=0 merged=449 pos=441 rot=8} spread=0.00 top=[]
+prop=00000000ed7900f000000000 rawScore=1300525 samples=716 actors=26 strong=13 topActor=525 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[]
+prop=000000000d8201f000000000 rawScore=1100958 samples=1139 actors=102 strong=11 topActor=958 quality={long=11 balanced=1 merged=953 pos=935 rot=18} spread=0.00 top=[]
+prop=000000005b8201f000000000 rawScore=1100642 samples=851 actors=128 strong=11 topActor=642 quality={long=11 balanced=1 merged=641 pos=628 rot=13} spread=0.00 top=[]
+prop=000000006e6700f000000000 rawScore=1002067 samples=2263 actors=81 strong=10 topActor=2067 quality={long=9 balanced=3 merged=1746 pos=1700 rot=46} spread=0.00 top=[]
+prop=00000000e28401f000000000 rawScore=802786 samples=2973 actors=92 strong=8 topActor=2786 quality={long=7 balanced=3 merged=2381 pos=2276 rot=105} spread=0.00 top=[]
+prop=00000000628401f000000000 rawScore=801237 samples=1364 actors=84 strong=8 topActor=1237 quality={long=7 balanced=2 merged=1153 pos=1097 rot=56} spread=0.00 top=[]
+prop=000000004c7d00f000000000 rawScore=800453 samples=548 actors=40 strong=8 topActor=453 quality={long=0 balanced=0 merged=6 pos=1 rot=5} spread=0.00 top=[]
+prop=00000000a18401f000000000 rawScore=701576 samples=1725 actors=69 strong=7 topActor=1576 quality={long=5 balanced=1 merged=915 pos=864 rot=51} spread=0.00 top=[]
+--- PASS: TestProbeY11R03PropCandidates (72.47s)
+PASS
+ok  	github.com/redraskal/r6-dissect/dissect	72.773s

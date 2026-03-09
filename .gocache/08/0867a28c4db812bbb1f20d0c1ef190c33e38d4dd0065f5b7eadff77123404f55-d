@@ -1,0 +1,5 @@
+# test log
+stat ..\replays\running_in_arcs_and_circles.rec
+stat ..\replays\running_in_arcs_and_circles.transforms.json
+open ..\replays\running_in_arcs_and_circles.rec
+open ..\replays\running_in_arcs_and_circles.transforms.json

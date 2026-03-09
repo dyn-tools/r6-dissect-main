@@ -1,0 +1,13 @@
+# import config
+packagefile encoding/json=D:\r6-dissect-main\.gocache\69\6963f34e6dbf88acf222921bf53fefc271cab28a4781e5b78866ea9538ae64bd-d
+packagefile fmt=D:\r6-dissect-main\.gocache\93\93b624378d4a0f9f350ddc43b890e38f48f1dd6567661d4531a3b85fc7ca8afc-d
+packagefile github.com/redraskal/r6-dissect/dissect=D:\r6-dissect-main\.gotmp\go-build306134102\b063\_pkg_.a
+packagefile github.com/rs/zerolog=D:\r6-dissect-main\.gocache\e0\e0d60e9a4d05e01186d84de040a6366467c6db0ec2e5fef880e6ed3efdb8e150-d
+packagefile github.com/rs/zerolog/log=D:\r6-dissect-main\.gocache\07\079800d7d60b1b8601f47764ffddea7c6af9d317db3af1d542f8ec3315a24c2d-d
+packagefile github.com/spf13/pflag=D:\r6-dissect-main\.gocache\29\29691a0a4c1da541ec81669e8d08a192dfcd6b4fdf0ca2c05fa2d60acb7c0a64-d
+packagefile github.com/spf13/viper=D:\r6-dissect-main\.gocache\a7\a70eca8fdd56506a871099efa4188fb9570c1eb085b9fa088884a576342cf176-d
+packagefile io=D:\r6-dissect-main\.gocache\c4\c46b9846da8e928626c1aabbc904c48f42f75c7833b2776bb23c1e570bec8f87-d
+packagefile os=D:\r6-dissect-main\.gocache\ad\adda065ea6f6f326deb7c0cc06a9c741ead09a0c131c7e8a64d5741114c3a025-d
+packagefile path/filepath=D:\r6-dissect-main\.gocache\aa\aa3012e1f029cc1f2d4ab7e1e4d33bfb2b70b5fff1be506152dfa8337d79e653-d
+packagefile strings=D:\r6-dissect-main\.gocache\0b\0bf56fe7997718017ff0cd004ca2f14eba0a4f0ffa89827608681b1b4ccb8169-d
+packagefile runtime=D:\r6-dissect-main\.gocache\d2\d218baa9c99eabbaa3006cf10e0c3cb41c0b10f4eab118352f3ef9976fe44c9c-d

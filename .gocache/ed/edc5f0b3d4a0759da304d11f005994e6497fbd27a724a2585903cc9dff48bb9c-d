@@ -1,0 +1,4 @@
+# test log
+getenv R6_DEBUG_ARCS
+open ../replays/running_in_arcs_and_circles.rec
+open ../replays/running_in_arcs_and_circles.current.json

@@ -1,0 +1,7 @@
+{
+  "name": "r6-dissect-viewer",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  }
+}

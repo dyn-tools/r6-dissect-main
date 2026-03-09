@@ -1,0 +1,6 @@
+./actor_markers.go
+./actor_records.go
+./envelope_props.go
+./find_pattern.go
+./freq_windows.go
+./prop_records.go

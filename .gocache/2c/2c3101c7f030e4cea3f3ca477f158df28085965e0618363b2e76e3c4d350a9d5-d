@@ -1,0 +1,41 @@
+=== RUN   TestProbeY11R03PropCandidates
+{"level":"debug","chunkedCompression (>=Y8S4)":true,"time":"2026-03-07T20:43:09+01:00"}
+{"level":"debug","time":"2026-03-07T20:43:09+01:00","message":"reading data"}
+{"level":"debug","time":"2026-03-07T20:43:09+01:00","message":"reading header magic"}
+{"level":"debug","time":"2026-03-07T20:43:09+01:00","message":"reading header"}
+{"level":"debug","time":"2026-03-07T20:43:09+01:00","message":"decompressing data"}
+{"level":"debug","zstd_sections":117,"time":"2026-03-07T20:43:09+01:00"}
+{"level":"debug","size":55303269,"time":"2026-03-07T20:43:09+01:00"}
+{"level":"debug","season":"Y11S1_Alpha03","code":9540659,"time":"2026-03-07T20:43:09+01:00"}
+prop=00000000257100f000000000 rawScore=3303466 samples=5195 actors=140 strong=33 topActor=3466 quality={long=15 balanced=12 merged=816 pos=498 rot=318} spread=3.29 top=[159/89/70 119/66/53 108/80/28 107/54/53 96/48/48]
+prop=00000000d77e00f000000000 rawScore=3202843 samples=4517 actors=211 strong=32 topActor=2843 quality={long=0 balanced=0 merged=2 pos=2 rot=0} spread=0.34 top=[1/1/0 1/1/0]
+prop=00000000c97100f000000000 rawScore=2903565 samples=4908 actors=201 strong=29 topActor=3565 quality={long=4 balanced=5 merged=371 pos=126 rot=245} spread=2.17 top=[124/12/112 72/33/39 49/31/18 38/8/30 19/17/2]
+prop=00000000ee7f00f000000000 rawScore=2902959 samples=4373 actors=183 strong=29 topActor=2959 quality={long=0 balanced=0 merged=2 pos=2 rot=0} spread=154.60 top=[1/1/0 1/1/0]
+prop=000000007f6600f000000000 rawScore=2802795 samples=3894 actors=128 strong=28 topActor=2795 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[1/1/0]
+prop=00000000f77e00f000000000 rawScore=2702655 samples=3748 actors=131 strong=27 topActor=2655 quality={long=0 balanced=0 merged=5 pos=5 rot=0} spread=83.38 top=[2/2/0 1/1/0 1/1/0 1/1/0]
+prop=00000000497900f000000000 rawScore=2602817 samples=4369 actors=163 strong=26 topActor=2817 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[1/1/0]
+prop=00000000dd7f00f000000000 rawScore=2503645 samples=4823 actors=124 strong=25 topActor=3645 quality={long=0 balanced=0 merged=2 pos=2 rot=0} spread=151.93 top=[1/1/0 1/1/0]
+prop=00000000bf7f00f000000000 rawScore=2002667 samples=3391 actors=116 strong=20 topActor=2667 quality={long=0 balanced=0 merged=5 pos=5 rot=0} spread=105.72 top=[2/2/0 1/1/0 1/1/0 1/1/0]
+prop=00000000eb6900f000000000 rawScore=1902678 samples=3459 actors=135 strong=19 topActor=2678 quality={long=3 balanced=1 merged=160 pos=24 rot=136} spread=1.41 top=[34/7/27 24/0/24 22/0/22 19/1/18 17/4/13]
+prop=00000000f95c00f000000000 rawScore=1800929 samples=1421 actors=49 strong=18 topActor=929 quality={long=0 balanced=0 merged=39 pos=39 rot=0} spread=2.01 top=[9/9/0 8/8/0 6/6/0 5/5/0 3/3/0]
+prop=00000000ea6600f000000000 rawScore=1601960 samples=2587 actors=111 strong=16 topActor=1960 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[1/1/0]
+prop=00000000718601f000000000 rawScore=1601519 samples=1938 actors=51 strong=16 topActor=1519 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[1/1/0]
+prop=00000000cf5900f000000000 rawScore=1601056 samples=1409 actors=51 strong=16 topActor=1056 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[1/1/0]
+prop=00000000c05900f000000000 rawScore=1401950 samples=2446 actors=93 strong=14 topActor=1950 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[1/1/0]
+prop=00000000888701f000000000 rawScore=1400795 samples=1081 actors=39 strong=14 topActor=795 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[1/1/0]
+prop=00000000946400f000000000 rawScore=1302457 samples=2785 actors=100 strong=13 topActor=2457 quality={long=12 balanced=4 merged=2054 pos=1910 rot=144} spread=46.86 top=[1322/1216/106 221/209/12 213/207/6 90/88/2 61/50/11]
+prop=00000000d78401f000000000 rawScore=1302288 samples=2689 actors=130 strong=13 topActor=2288 quality={long=4 balanced=0 merged=449 pos=441 rot=8} spread=7.30 top=[270/266/4 67/66/1 28/28/0 27/26/1 15/13/2]
+prop=00000000ed7900f000000000 rawScore=1300525 samples=716 actors=26 strong=13 topActor=525 quality={long=0 balanced=0 merged=1 pos=1 rot=0} spread=0.00 top=[1/1/0]
+prop=00000000617b00f000000000 rawScore=1201823 samples=2063 actors=70 strong=12 topActor=1823 quality={long=0 balanced=0 merged=2 pos=2 rot=0} spread=156.64 top=[1/1/0 1/1/0]
+pair=00000000946400f000000000/00000000257100f000000000 quality={long=18 balanced=10 merged=2729 pos=2436 rot=293} spread=90.23 top=[1568/1568/0 325/272/53 286/238/48 174/104/70 104/51/53]
+pair=00000000946400f000000000/00000000c97100f000000000 quality={long=14 balanced=9 merged=2659 pos=2436 rot=223} spread=90.23 top=[1568/1568/0 311/272/39 238/238/0 216/104/112 79/79/0]
+pair=000000000d8201f000000000/00000000257100f000000000 quality={long=15 balanced=7 merged=1197 pos=953 rot=244} spread=28.05 top=[269/216/53 205/205/0 175/127/48 172/102/70 135/82/53]
+pair=000000000d8201f000000000/00000000c97100f000000000 quality={long=13 balanced=8 merged=1156 pos=939 rot=217} spread=27.23 top=[234/216/18 214/102/112 207/205/2 127/127/0 121/82/39]
+pair=000000006e6700f000000000/00000000257100f000000000 quality={long=14 balanced=10 merged=2344 pos=2017 rot=327} spread=80.05 top=[1602/1602/0 208/155/53 167/119/48 104/34/70 84/31/53]
+pair=000000006e6700f000000000/00000000c97100f000000000 quality={long=11 balanced=9 merged=2277 pos=2038 rot=239} spread=76.43 top=[1602/1602/0 194/155/39 146/34/112 119/119/0 56/26/30]
+pair=00000000e28401f000000000/00000000257100f000000000 quality={long=14 balanced=9 merged=3069 pos=2751 rot=318} spread=63.06 top=[2398/2398/0 158/105/53 148/100/48 103/50/53 101/31/70]
+pair=00000000e28401f000000000/00000000c97100f000000000 quality={long=10 balanced=9 merged=3010 pos=2771 rot=239} spread=59.74 top=[2398/2398/0 144/105/39 143/31/112 100/100/0 68/50/18]
+prop=00000000946400f000000000 raw=2785 primaryWithin=2338 secondaryWithin=431 both=20 primaryOnly=2318 secondaryOnly=411 neither=36
+--- PASS: TestProbeY11R03PropCandidates (101.89s)
+PASS
+ok  	github.com/redraskal/r6-dissect/dissect	102.207s

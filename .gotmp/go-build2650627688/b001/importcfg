@@ -1,0 +1,10 @@
+# import config
+packagefile encoding/json=d:\r6-dissect-main\.gocache\69\6963f34e6dbf88acf222921bf53fefc271cab28a4781e5b78866ea9538ae64bd-d
+packagefile fmt=d:\r6-dissect-main\.gocache\93\93b624378d4a0f9f350ddc43b890e38f48f1dd6567661d4531a3b85fc7ca8afc-d
+packagefile github.com/redraskal/r6-dissect/dissect=d:\r6-dissect-main\.gocache\82\820586d887df9ef40deb475a37d1c555c3975807ce4a9932deb3feed964864ea-d
+packagefile github.com/rs/zerolog=d:\r6-dissect-main\.gocache\e0\e0d60e9a4d05e01186d84de040a6366467c6db0ec2e5fef880e6ed3efdb8e150-d
+packagefile github.com/rs/zerolog/log=d:\r6-dissect-main\.gocache\07\079800d7d60b1b8601f47764ffddea7c6af9d317db3af1d542f8ec3315a24c2d-d
+packagefile os=d:\r6-dissect-main\.gocache\ad\adda065ea6f6f326deb7c0cc06a9c741ead09a0c131c7e8a64d5741114c3a025-d
+packagefile path/filepath=d:\r6-dissect-main\.gocache\aa\aa3012e1f029cc1f2d4ab7e1e4d33bfb2b70b5fff1be506152dfa8337d79e653-d
+packagefile sort=d:\r6-dissect-main\.gocache\88\889d44a182481884fbe94f460c6844ec4e17fa4d78b340899c285cf4e9997876-d
+packagefile runtime=d:\r6-dissect-main\.gocache\d2\d218baa9c99eabbaa3006cf10e0c3cb41c0b10f4eab118352f3ef9976fe44c9c-d

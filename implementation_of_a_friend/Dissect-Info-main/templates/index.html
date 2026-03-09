@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R6 Dissect Info</title>
+<style>
+:root {
+  --bg: #0d0d0d;
+  --panel: #1a1a1a;
+  --panel2: #222;
+  --border: #333;
+  --accent: #c4a832;
+  --accent2: #e0c040;
+  --text: #ddd;
+  --text-dim: #888;
+  --kill: #5a1010;
+  --death: #2a2a2a;
+  --plant: #0d2d50;
+  --disable: #1a3a1a;
+  --objective: #3a2a00;
+  --swap: #1e1e30;
+  --battleye: #3a1a00;
+  --leave: #2a0d3a;
+  --other: #1a1a1a;
+  --green: #2a6a2a;
+  --red: #6a2a2a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+h1 { color: var(--accent); font-size: 22px; padding: 16px 20px 8px; border-bottom: 1px solid var(--border); }
+h2 { color: var(--accent); font-size: 15px; margin-bottom: 10px; }
+h3 { color: var(--accent2); font-size: 13px; margin: 8px 0 6px; }
+
+.page { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
+
+/* Forms */
+.forms { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+.form-card {
+  flex: 1; min-width: 300px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 16px;
+}
+.form-card label { display: block; margin-bottom: 8px; color: var(--text-dim); }
+.form-card input[type=text], .form-card input[type=file] {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); padding: 6px 8px; margin-top: 2px; font-family: inherit; font-size: 12px;
+}
+.form-card .row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.form-card label.check { display: flex; align-items: center; gap: 6px; color: var(--text-dim); cursor: pointer; }
+button {
+  background: var(--accent); color: #000; border: none; padding: 7px 18px;
+  font-family: inherit; font-size: 12px; font-weight: bold; cursor: pointer;
+}
+button:hover { background: var(--accent2); }
+button.sec { background: var(--panel2); color: var(--accent); border: 1px solid var(--accent); }
+button.sec:hover { background: var(--accent); color: #000; }
+
+/* Error */
+.error { background: #3a0000; border: 1px solid #900; color: #f88; padding: 12px 16px; margin: 12px 0; }
+
+/* Section */
+.section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  margin: 10px 0;
+  padding: 14px 16px;
+}
+.section-title {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* KV grid */
+.kv { display: grid; grid-template-columns: 200px 1fr; gap: 2px 12px; }
+.kv-key { color: var(--text-dim); }
+.kv-val { color: var(--text); word-break: break-all; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { background: var(--panel2); color: var(--accent); text-align: left; padding: 5px 8px; border: 1px solid var(--border); white-space: nowrap; }
+td { padding: 4px 8px; border: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+
+/* Event row colors */
+.ev-kill td { background: var(--kill); }
+.ev-death td { background: var(--death); }
+.ev-plant td { background: var(--plant); }
+.ev-disable td { background: var(--disable); }
+.ev-objective td { background: var(--objective); }
+.ev-swap td { background: var(--swap); }
+.ev-battleye td { background: var(--battleye); }
+.ev-leave td { background: var(--leave); }
+.ev-other td { background: var(--other); }
+
+/* Teams */
+.teams { display: flex; gap: 12px; flex-wrap: wrap; }
+.team-card {
+  flex: 1; min-width: 220px;
+  background: var(--panel2); border: 1px solid var(--border); padding: 12px;
+}
+.team-won { border-color: var(--accent); }
+.team-name { font-size: 14px; font-weight: bold; color: var(--accent2); margin-bottom: 6px; }
+.badge {
+  display: inline-block; padding: 1px 7px; font-size: 11px;
+  background: var(--accent); color: #000; margin-left: 6px;
+}
+
+/* Tabs */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.tab-btn {
+  background: var(--panel2); color: var(--text-dim); border: 1px solid var(--border);
+  padding: 4px 12px; cursor: pointer; font-family: inherit; font-size: 11px;
+}
+.tab-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* Exports */
+.exports { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+/* Dim text */
+.dim { color: var(--text-dim); }
+.hs-yes { color: #f88; font-weight: bold; }
+.won-yes { color: var(--accent); font-weight: bold; }
+.died-yes { color: #f66; }
+
+.round-header { background: var(--panel2); border: 1px solid var(--accent); padding: 8px 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.round-header .rh-val { color: var(--accent2); font-weight: bold; }
+
+/* Scrollable table container */
+.tbl-wrap { overflow-x: auto; }
+
+/* Analyze / binary tool */
+.hex-dump { font-family: monospace; font-size: 11px; white-space: pre; color: #aaa; background: #0a0a0a; border: 1px solid var(--border); padding: 10px; overflow-x: auto; line-height: 1.4; }
+.float-hit { background: var(--panel2); border: 1px solid #444; padding: 6px 10px; margin: 4px 0; font-size: 11px; }
+.float-hit .fh-offset { color: var(--accent); font-weight: bold; }
+.float-hit .fh-val { color: #7ef; }
+.float-hit .fh-ctx { color: #777; }
+.float-hit .fh-adj { color: #aaa; }
+.vec3-row td.x { color: #f99; }
+.vec3-row td.y { color: #9f9; }
+.vec3-row td.z { color: #99f; }
+.info-box { background: #1a1a0d; border: 1px solid #554; padding: 10px 14px; margin: 8px 0; font-size: 12px; line-height: 1.7; color: #cca; }
+.info-box strong { color: var(--accent2); }
+.mono { font-family: 'Courier New', monospace; font-size: 11px; color: var(--accent); }
+td.fh-val { color: #7ef; }
+td.fh-adj { color: #aaa; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>R6 Dissect Info</h1>
+
+  <div class="forms">
+    <!-- Single round form -->
+    <div class="form-card">
+      <h2>Single Round (.rec)</h2>
+      <form method="POST" action="/single" enctype="multipart/form-data">
+        <label>File path:<br>
+          <input type="text" name="path" placeholder="C:\...\Match-...-R01.rec">
+        </label>
+        <label style="margin-top:8px;">Or upload file:<br>
+          <input type="file" name="file" accept=".rec">
+        </label>
+        <div class="row">
+          <label class="check">
+            <input type="checkbox" name="headeronly"> Header only (fast — ReadPartial)
+          </label>
+          <button type="submit">Parse Round</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Full match form -->
+    <div class="form-card">
+      <h2>Full Match (directory)</h2>
+      <form method="POST" action="/match">
+        <label>Match directory path:<br>
+          <input type="text" name="path" placeholder="C:\...\Match-2024-...">
+        </label>
+        <div class="row" style="margin-top:14px;">
+          <button type="submit">Parse Match</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Binary analyzer form -->
+    <div class="form-card" style="border-color:#554;">
+      <h2 style="color:#cc9;">Binary Analyzer (RE Tool)</h2>
+      <form method="POST" action="/analyze">
+        <label>.rec file path:<br>
+          <input type="text" name="path" placeholder="C:\...\Match-...-R01.rec">
+        </label>
+        <label style="margin-top:8px;">Float value to find (e.g. from Cheat Engine):<br>
+          <input type="text" name="target" placeholder="3.142">
+        </label>
+        <label style="margin-top:8px;">Tolerance (default 0.01):<br>
+          <input type="text" name="tolerance" placeholder="0.01" style="width:100px">
+        </label>
+        <label style="margin-top:8px;">Custom hex pattern (e.g. from CE memory view):<br>
+          <input type="text" name="hexpattern" placeholder="1f 07 ef c9" style="font-family:monospace">
+        </label>
+        <div class="row" style="margin-top:10px;">
+          <label class="check"><input type="checkbox" name="vec3"> Scan Vec3 + strides</label>
+          <button type="submit" style="background:#887733;">Analyze Binary</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {{if .Error}}
+  <div class="error">ERROR: {{.Error}}</div>
+  {{end}}
+
+  {{if eq .Mode "single"}}{{template "roundView" .SingleRound}}{{end}}
+  {{if eq .Mode "match"}}{{template "matchView" .Match}}{{end}}
+  {{if eq .Mode "analyze"}}{{template "analyzeView" .Analyze}}{{end}}
+</div>
+
+<script>
+function switchTab(groupId, idx) {
+  var panes = document.querySelectorAll('[data-group="' + groupId + '"].tab-pane');
+  var btns  = document.querySelectorAll('[data-group="' + groupId + '"].tab-btn');
+  panes.forEach(function(p, i) { p.classList.toggle('active', i === idx); });
+  btns.forEach(function(b, i)  { b.classList.toggle('active', i === idx); });
+}
+</script>
+
+{{/* ---- SUB-TEMPLATES ---- */}}
+
+{{define "roundView"}}
+<div class="round-header">
+  <span>Map: <span class="rh-val">{{.Header.Map}}</span></span>
+  <span>Mode: <span class="rh-val">{{.Header.GameMode}}</span></span>
+  <span>Type: <span class="rh-val">{{.Header.MatchType}}</span></span>
+  <span>Round: <span class="rh-val">{{.Header.RoundNumber}}</span></span>
+  <span>Version: <span class="rh-val">{{.Header.GameVersion}}</span></span>
+  {{if .HeaderOnly}}<span class="badge">HEADER ONLY</span>{{end}}
+</div>
+
+{{template "headerSection" .}}
+{{template "teamsSection" .}}
+{{template "playersSection" .}}
+{{if not .HeaderOnly}}
+{{template "feedbackSection" .}}
+{{template "tradesSection" .}}
+{{template "statsSection" .}}
+{{template "scoreboardSection" .}}
+{{else}}
+<div class="section"><span class="dim">Events, stats, and scoreboard not available in header-only mode (ReadPartial).</span></div>
+{{end}}
+
+{{if .EntityTracks}}
+<div class="section" id="movement-section">
+  <div class="section-title">Movement Map — <span id="mv-count"></span></div>
+  <div style="margin-bottom:8px;">
+    <button id="mv-toggle" style="font-size:11px;padding:3px 10px;background:#222;border:1px solid #555;color:#ccc;cursor:pointer;">Show all entities</button>
+    <span id="mv-hint" style="font-size:11px;color:#666;margin-left:8px;">Showing moving entities only</span>
+  </div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">
+    <div>
+      <canvas id="mvCanvas" width="560" height="560" style="background:#0a0a0a;border:1px solid #444;cursor:crosshair;display:block;"></canvas>
+      <div style="margin-top:6px;font-size:11px;color:#666;">Scroll to zoom · Drag to pan · Top-down view (X→right, Y→down · Z=height shown in tooltip)</div>
+    </div>
+    <div id="mv-legend" style="min-width:220px;font-size:12px;"></div>
+  </div>
+  <div id="mv-tooltip" style="position:fixed;background:#222;border:1px solid #555;padding:6px 10px;font-size:11px;color:#ddd;pointer-events:none;display:none;z-index:100;"></div>
+</div>
+<script>
+(function(){
+  var tracks = {{.EntityTracksJSON}};
+  var canvas = document.getElementById('mvCanvas');
+  if (!canvas || !tracks || tracks.length === 0) return;
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+  var tooltip = document.getElementById('mv-tooltip');
+  var legend = document.getElementById('mv-legend');
+  var countEl = document.getElementById('mv-count');
+  var toggleBtn = document.getElementById('mv-toggle');
+  var hintEl = document.getElementById('mv-hint');
+
+  // Max gap (metres) before path line is broken — filters teleport/false-positive jumps.
+  var MAX_JUMP = 20;
+
+  var COLORS = ['#c4a832','#4fc3f7','#81c784','#f48fb1','#ffb74d','#ce93d8','#80cbc4','#ef9a9a'];
+  function isSentinel(f) { return Math.abs(f.X) > 90 || (Math.abs(f.Z) > 90 && Math.abs(f.X) < 2); }
+  function validFrames(t) { return t.Frames ? t.Frames.filter(function(f){ return !isSentinel(f); }) : []; }
+
+  var allValid = tracks.filter(function(t){ return validFrames(t).length > 0; });
+  var movingOnly = tracks.filter(function(t){ return validFrames(t).length >= 2; });
+
+  // showAll: toggle between moving-only and all entities
+  // focusedID: when set, only that entity is shown (null = show all of current set)
+  var showAll = false;
+  var focusedID = null;
+
+  function getBase() { return showAll ? allValid : movingOnly; }
+  function getDisplayed() {
+    if (focusedID !== null) {
+      return allValid.filter(function(t){ return t.EntityID === focusedID; });
+    }
+    return getBase();
+  }
+
+  toggleBtn.addEventListener('click', function(){
+    showAll = !showAll;
+    focusedID = null;
+    toggleBtn.textContent = showAll ? 'Show moving only' : 'Show all entities';
+    hintEl.textContent = showAll ? 'Showing all ' + allValid.length + ' entities' : 'Showing moving entities only';
+    resetView(); buildLegend(); draw();
+  });
+
+  function updateCount() {
+    countEl.textContent = movingOnly.length + ' moving / ' + allValid.length + ' total entities';
+  }
+  updateCount();
+
+  if (allValid.length === 0) {
+    ctx.fillStyle = '#888'; ctx.font = '13px monospace';
+    ctx.fillText('No positions found', 20, 40);
+    return;
+  }
+
+  var view = { ox: 0, oy: 0, scale: 1 };
+  function computeBounds(list) {
+    var minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+    list.forEach(function(t){
+      validFrames(t).forEach(function(f){
+        if (f.X < minX) minX=f.X; if (f.X > maxX) maxX=f.X;
+        if (f.Y < minY) minY=f.Y; if (f.Y > maxY) maxY=f.Y;
+      });
+    });
+    if (!isFinite(minX)) { minX=-50; maxX=50; minY=-50; maxY=50; }
+    var pad = Math.max((maxX-minX)*0.15, (maxY-minY)*0.15, 5);
+    return { minX:minX-pad, maxX:maxX+pad, minZ:minY-pad, maxZ:maxY+pad };
+  }
+  var bounds = computeBounds(movingOnly.length > 0 ? movingOnly : allValid);
+  function resetView() {
+    var src = getDisplayed().length > 0 ? getDisplayed() : allValid;
+    bounds = computeBounds(src);
+    var sx = W / (bounds.maxX - bounds.minX), sz = H / (bounds.maxZ - bounds.minZ);
+    view.scale = Math.min(sx, sz) * 0.92;
+    view.ox = (bounds.minX + bounds.maxX) / 2;
+    view.oy = (bounds.minZ + bounds.maxZ) / 2;
+  }
+  resetView();
+
+  function worldToCanvas(wx, wy) {
+    return { x: W/2 + (wx - view.ox) * view.scale, y: H/2 + (wy - view.oy) * view.scale };
+  }
+  function canvasToWorld(cx, cy) {
+    return { x: view.ox + (cx - W/2) / view.scale, y: view.oy + (cy - H/2) / view.scale };
+  }
+
+  // Yaw offset: quaternion gives angle from +X axis; subtract 90° to get forward vector
+  // (game forward = +Y axis, which is 90° CCW from +X in standard math convention).
+  var YAW_OFFSET = 90;
+
+  function drawArrow(cx, cy, yawDeg, len, color) {
+    var rad = (yawDeg + YAW_OFFSET) * Math.PI / 180;
+    var ex = cx + Math.cos(rad) * len, ey = cy + Math.sin(rad) * len;
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+    var a1 = rad + 2.6, a2 = rad - 2.6, hs = len * 0.35;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex + Math.cos(a1)*hs, ey + Math.sin(a1)*hs);
+    ctx.lineTo(ex + Math.cos(a2)*hs, ey + Math.sin(a2)*hs);
+    ctx.closePath(); ctx.fillStyle = color; ctx.fill();
+  }
+
+  // Split frames into continuous segments — break when jump > MAX_JUMP metres.
+  function pathSegments(frames) {
+    if (frames.length === 0) return [];
+    var segs = [[frames[0]]];
+    for (var i = 1; i < frames.length; i++) {
+      var prev = frames[i-1], cur = frames[i];
+      var dx = cur.X - prev.X, dy = cur.Y - prev.Y;
+      if (Math.sqrt(dx*dx + dy*dy) > MAX_JUMP) {
+        segs.push([cur]);
+      } else {
+        segs[segs.length-1].push(cur);
+      }
+    }
+    return segs;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    var displayed = getDisplayed();
+
+    // Grid
+    ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1;
+    var gridStep = 10;
+    for (var gx = Math.floor(bounds.minX/gridStep)*gridStep; gx <= bounds.maxX; gx += gridStep) {
+      var p = worldToCanvas(gx, bounds.minZ); var p2 = worldToCanvas(gx, bounds.maxZ);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    }
+    for (var gz = Math.floor(bounds.minZ/gridStep)*gridStep; gz <= bounds.maxZ; gz += gridStep) {
+      var p = worldToCanvas(bounds.minX, gz); var p2 = worldToCanvas(bounds.maxX, gz);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    }
+
+    // Axes
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    var ax = worldToCanvas(0, bounds.minZ), ax2 = worldToCanvas(0, bounds.maxZ);
+    ctx.beginPath(); ctx.moveTo(ax.x, ax.y); ctx.lineTo(ax2.x, ax2.y); ctx.stroke();
+    var ay = worldToCanvas(bounds.minX, 0), ay2 = worldToCanvas(bounds.maxX, 0);
+    ctx.beginPath(); ctx.moveTo(ay.x, ay.y); ctx.lineTo(ay2.x, ay2.y); ctx.stroke();
+
+    displayed.forEach(function(track, ti) {
+      var color = COLORS[ti % COLORS.length];
+      var frames = validFrames(track);
+      if (frames.length === 0) return;
+      var segs = pathSegments(frames);
+
+      // Path lines — each continuous segment drawn separately
+      ctx.strokeStyle = color + '88'; ctx.lineWidth = 1.5;
+      segs.forEach(function(seg) {
+        if (seg.length < 2) return;
+        ctx.beginPath();
+        seg.forEach(function(f, fi) {
+          var p = worldToCanvas(f.X, f.Y);
+          if (fi === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        });
+        ctx.stroke();
+      });
+
+      // Points + yaw arrows
+      frames.forEach(function(f, fi) {
+        var p = worldToCanvas(f.X, f.Y);
+        var r = fi === 0 ? 5 : 3.5;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+        ctx.fillStyle = fi === 0 ? color : color + 'bb'; ctx.fill();
+        ctx.strokeStyle = '#0008'; ctx.lineWidth = 0.5; ctx.stroke();
+        var arrowLen = Math.max(8, view.scale * 3);
+        drawArrow(p.x, p.y, f.YawDeg, arrowLen, color);
+      });
+
+      // Label spawn point
+      var fp = worldToCanvas(frames[0].X, frames[0].Y);
+      ctx.fillStyle = color; ctx.font = 'bold 10px monospace';
+      ctx.fillText(track.EntityHex, fp.x + 7, fp.y - 7);
+    });
+
+    // Scale bar
+    var barWorldLen = 10;
+    var barPx = barWorldLen * view.scale;
+    ctx.strokeStyle = '#666'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(12, H-14); ctx.lineTo(12+barPx, H-14); ctx.stroke();
+    ctx.fillStyle = '#666'; ctx.font = '10px monospace';
+    ctx.fillText(barWorldLen + 'm', 12 + barPx + 4, H-10);
+  }
+
+  // Legend — click row to focus, click again to deselect
+  function buildLegend() {
+    var base = getBase();
+    var focused = focusedID !== null ? allValid.filter(function(t){ return t.EntityID === focusedID; }) : [];
+    var html = '<div style="color:#888;margin-bottom:6px;font-size:11px;">Click entity to isolate · click again to clear</div>';
+    if (focusedID !== null && focused.length > 0) {
+      html += '<div style="margin-bottom:6px;"><button id="mv-clear-focus" style="font-size:11px;padding:2px 8px;background:#333;border:1px solid #c4a832;color:#c4a832;cursor:pointer;">✕ Clear selection</button></div>';
+    }
+    base.forEach(function(track, ti) {
+      var color = COLORS[ti % COLORS.length];
+      var frames = validFrames(track);
+      var isFocused = focusedID === track.EntityID;
+      var dimmed = focusedID !== null && !isFocused;
+      var rowStyle = 'margin:4px 0;padding:4px 6px;border-radius:4px;cursor:pointer;border:1px solid '
+        + (isFocused ? '#c4a832' : 'transparent') + ';'
+        + (dimmed ? 'opacity:0.35;' : '');
+      html += '<div class="mv-entity-row" data-eid="'+track.EntityID+'" style="'+rowStyle+'">';
+      html += '<div style="display:flex;align-items:center;gap:8px;">';
+      html += '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'+color+';flex-shrink:0;"></span>';
+      html += '<span style="color:'+color+';font-family:monospace;">'+track.EntityHex+'</span>';
+      html += '<span style="color:#666;">'+frames.length+' frames</span>';
+      html += '</div>';
+      if (frames.length > 0) {
+        var f0 = frames[0];
+        var segs = pathSegments(frames);
+        var contiguous = segs.filter(function(s){ return s.length >= 2; }).length;
+        html += '<div style="color:#888;font-size:10px;margin-left:20px;">X='+f0.X.toFixed(1)+' Y='+f0.Y.toFixed(1)+' Z='+f0.Z.toFixed(1)+' Yaw='+(f0.YawDeg+YAW_OFFSET).toFixed(1)+'°</div>';
+        if (segs.length > 1) {
+          html += '<div style="color:#f48fb1;font-size:10px;margin-left:20px;">'+segs.length+' segments ('+( segs.length-1)+' jumps filtered)</div>';
+        }
+      }
+      html += '</div>';
+    });
+    legend.innerHTML = html;
+
+    // Click handlers
+    legend.querySelectorAll('.mv-entity-row').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var eid = parseInt(el.dataset.eid);
+        focusedID = (focusedID === eid) ? null : eid;
+        resetView(); buildLegend(); draw();
+      });
+    });
+    var clearBtn = document.getElementById('mv-clear-focus');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        focusedID = null;
+        resetView(); buildLegend(); draw();
+      });
+    }
+  }
+  buildLegend();
+
+  // Pan + zoom
+  var drag = null;
+  canvas.addEventListener('mousedown', function(e){ drag = { sx:e.clientX, sy:e.clientY, ox:view.ox, oy:view.oy }; });
+  canvas.addEventListener('mousemove', function(e){
+    if (drag) {
+      view.ox = drag.ox - (e.clientX - drag.sx) / view.scale;
+      view.oy = drag.oy - (e.clientY - drag.sy) / view.scale;
+      draw(); return;
+    }
+    var rect = canvas.getBoundingClientRect();
+    var cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    var best = null, bestDist = Infinity;
+    getDisplayed().forEach(function(track, ti){
+      validFrames(track).forEach(function(f){
+        var p = worldToCanvas(f.X, f.Y);
+        var d = Math.hypot(p.x - cx, p.y - cy);
+        if (d < 12 && d < bestDist) { bestDist = d; best = {f:f, track:track, ti:ti}; }
+      });
+    });
+    if (best) {
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.clientX+14)+'px'; tooltip.style.top = (e.clientY-10)+'px';
+      tooltip.innerHTML = '<span style="color:'+COLORS[best.ti%COLORS.length]+'">'+best.track.EntityHex+'</span><br>'
+        +'X='+best.f.X.toFixed(3)+'  Y='+best.f.Y.toFixed(3)+'  Height(Z)='+best.f.Z.toFixed(3)+'<br>'
+        +'Yaw='+(best.f.YawDeg+YAW_OFFSET).toFixed(1)+'°  raw='+best.f.YawDeg.toFixed(1)+'°'
+        +(best.f.Offset?'  off=0x'+best.f.Offset.toString(16):'');
+    } else { tooltip.style.display = 'none'; }
+  });
+  canvas.addEventListener('mouseup', function(){ drag=null; });
+  canvas.addEventListener('mouseleave', function(){ drag=null; tooltip.style.display='none'; });
+  canvas.addEventListener('wheel', function(e){
+    e.preventDefault();
+    var rect = canvas.getBoundingClientRect();
+    var cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    var wc = canvasToWorld(cx, cy);
+    view.scale *= e.deltaY < 0 ? 1.15 : 0.87;
+    view.ox = wc.x - (cx - W/2) / view.scale;
+    view.oy = wc.y - (cy - H/2) / view.scale;
+    draw();
+  }, {passive:false});
+
+  draw();
+})();
+</script>
+{{end}}
+
+{{if .SourcePath}}
+<div class="section">
+  <div class="section-title">Exports</div>
+  <div class="exports">
+    <form method="POST" action="/export/json/single">
+      <input type="hidden" name="path" value="{{.SourcePath}}">
+      <button class="sec">Download JSON</button>
+    </form>
+    <form method="POST" action="/export/raw">
+      <input type="hidden" name="path" value="{{.SourcePath}}">
+      <button class="sec">Download Raw Binary</button>
+    </form>
+  </div>
+</div>
+{{end}}
+{{end}}
+
+
+{{define "headerSection"}}
+<div class="section">
+  <div class="section-title">Match Header</div>
+  <div class="kv">
+    <span class="kv-key">Match ID</span><span class="kv-val">{{.Header.MatchID}}</span>
+    <span class="kv-key">Timestamp</span><span class="kv-val">{{formatTime .Header.Timestamp}}</span>
+    <span class="kv-key">Game Version</span><span class="kv-val">{{.Header.GameVersion}}</span>
+    <span class="kv-key">Code Version</span><span class="kv-val">{{.Header.CodeVersion}}</span>
+    <span class="kv-key">Map</span><span class="kv-val">{{.Header.Map}}</span>
+    <span class="kv-key">Site</span><span class="kv-val">{{if .Header.Site}}{{.Header.Site}}{{else}}<span class="dim">—</span>{{end}}</span>
+    <span class="kv-key">Game Mode</span><span class="kv-val">{{.Header.GameMode}}</span>
+    <span class="kv-key">Match Type</span><span class="kv-val">{{.Header.MatchType}}</span>
+    <span class="kv-key">Round Number</span><span class="kv-val">{{.Header.RoundNumber}}</span>
+    <span class="kv-key">Overtime Round</span><span class="kv-val">{{.Header.OvertimeRoundNumber}}</span>
+    <span class="kv-key">Rounds Per Match</span><span class="kv-val">{{.Header.RoundsPerMatch}}</span>
+    <span class="kv-key">Rounds Overtime</span><span class="kv-val">{{.Header.RoundsPerMatchOvertime}}</span>
+    <span class="kv-key">Additional Tags</span><span class="kv-val">{{if .Header.AdditionalTags}}{{.Header.AdditionalTags}}{{else}}<span class="dim">—</span>{{end}}</span>
+    <span class="kv-key">Playlist Category</span><span class="kv-val">{{.Header.PlaylistCategory}}</span>
+    <span class="kv-key">Recording Player ID</span><span class="kv-val">{{.Header.RecordingPlayerID}}</span>
+    <span class="kv-key">Recording Profile ID</span><span class="kv-val">{{if .Header.RecordingProfileID}}{{.Header.RecordingProfileID}}{{else}}<span class="dim">—</span>{{end}}</span>
+    {{if .RecordingPlayer}}
+    <span class="kv-key">Recording Player</span><span class="kv-val">{{.RecordingPlayer.Username}} (index: {{.RecordingPlayerIndex}})</span>
+    {{end}}
+    <span class="kv-key">Players Team 0</span><span class="kv-val">{{.NumPlayersTeam0}}</span>
+    <span class="kv-key">Players Team 1</span><span class="kv-val">{{.NumPlayersTeam1}}</span>
+    <span class="kv-key">GM Settings</span><span class="kv-val dim">{{range $i, $v := .Header.GMSettings}}{{if $i}}, {{end}}{{$v}}{{end}}</span>
+  </div>
+</div>
+{{end}}
+
+
+{{define "teamsSection"}}
+<div class="section">
+  <div class="section-title">Teams</div>
+  <div class="teams">
+  {{range .Header.Teams}}
+  <div class="team-card {{if .Won}}team-won{{end}}">
+    <div class="team-name">
+      {{.Name}}
+      {{if .Won}}<span class="badge">WON</span>{{end}}
+    </div>
+    <div class="kv">
+      <span class="kv-key">Role</span><span class="kv-val">{{.Role}}</span>
+      <span class="kv-key">Score</span><span class="kv-val">{{.Score}}</span>
+      <span class="kv-key">Starting Score</span><span class="kv-val">{{.StartingScore}}</span>
+      <span class="kv-key">Won</span><span class="kv-val {{if .Won}}won-yes{{end}}">{{if .Won}}Yes{{else}}No{{end}}</span>
+      <span class="kv-key">Win Condition</span><span class="kv-val">{{if .WinCondition}}{{.WinCondition}}{{else}}<span class="dim">—</span>{{end}}</span>
+    </div>
+  </div>
+  {{end}}
+  </div>
+</div>
+{{end}}
+
+
+{{define "playersSection"}}
+<div class="section">
+  <div class="section-title">Players ({{len .Header.Players}})</div>
+  <div class="tbl-wrap">
+  <table>
+    <tr>
+      <th>#</th><th>Username</th><th>Team</th><th>Operator</th><th>Op Role</th>
+      <th>Spawn</th><th>Role Name</th><th>Alliance</th>
+      <th>Hero Name</th><th>Role Image</th><th>Role Portrait</th>
+      <th>Player ID</th><th>Profile ID</th><th>DissectID</th>
+    </tr>
+    {{range $i, $p := .Header.Players}}
+    <tr>
+      <td class="dim">{{add $i 1}}</td>
+      <td>{{$p.Username}}</td>
+      <td>{{$p.TeamIndex}}</td>
+      <td>{{$p.Operator}}</td>
+      <td>{{$p.Operator.Role}}</td>
+      <td>{{if $p.Spawn}}{{$p.Spawn}}{{else}}<span class="dim">—</span>{{end}}</td>
+      <td>{{if $p.RoleName}}{{$p.RoleName}}{{else}}<span class="dim">—</span>{{end}}</td>
+      <td>{{$p.Alliance}}</td>
+      <td>{{$p.HeroName}}</td>
+      <td>{{$p.RoleImage}}</td>
+      <td>{{$p.RolePortrait}}</td>
+      <td class="dim">{{$p.ID}}</td>
+      <td class="dim">{{if $p.ProfileID}}{{$p.ProfileID}}{{else}}—{{end}}</td>
+      <td class="dim">{{formatHex $p.DissectID}}</td>
+    </tr>
+    {{end}}
+  </table>
+  </div>
+</div>
+{{end}}
+
+
+{{define "feedbackSection"}}
+<div class="section">
+  <div class="section-title">All Match Events ({{len .AllFeedback}} total)</div>
+  {{if .AllFeedback}}
+  <div class="tbl-wrap">
+  <table>
+    <tr>
+      <th>Time</th><th>Time(s)</th><th>Type</th><th>Username</th>
+      <th>Target</th><th>Headshot</th><th>Operator</th><th>Message</th>
+    </tr>
+    {{range .AllFeedback}}
+    <tr class="{{eventTypeClass .Type}}">
+      <td>{{.Time}}</td>
+      <td>{{formatFloat .TimeInSeconds}}</td>
+      <td>{{eventTypeName .Type}}</td>
+      <td>{{if .Username}}{{.Username}}{{else}}<span class="dim">—</span>{{end}}</td>
+      <td>{{if .Target}}{{.Target}}{{else}}<span class="dim">—</span>{{end}}</td>
+      <td>{{derefBool .Headshot}}</td>
+      <td>{{.Operator}}</td>
+      <td>{{if .Message}}{{.Message}}{{else}}<span class="dim">—</span>{{end}}</td>
+    </tr>
+    {{end}}
+  </table>
+  </div>
+
+  {{if .KillsAndDeaths}}
+  <h3 style="margin-top:14px;">Kills &amp; Deaths Only ({{len .KillsAndDeaths}})</h3>
+  <div class="tbl-wrap">
+  <table>
+    <tr>
+      <th>Time</th><th>Type</th><th>Attacker</th><th>Target</th><th>Headshot</th><th>Operator</th>
+    </tr>
+    {{range .KillsAndDeaths}}
+    <tr class="{{eventTypeClass .Type}}">
+      <td>{{.Time}}</td>
+      <td>{{eventTypeName .Type}}</td>
+      <td>{{if .Username}}{{.Username}}{{else}}<span class="dim">—</span>{{end}}</td>
+      <td>{{if .Target}}{{.Target}}{{else}}<span class="dim">—</span>{{end}}</td>
+      <td>{{if derefBool .Headshot | eq "Yes"}}<span class="hs-yes">Yes</span>{{else}}{{derefBool .Headshot}}{{end}}</td>
+      <td>{{.Operator}}</td>
+    </tr>
+    {{end}}
+  </table>
+  </div>
+  {{end}}
+
+  {{if .OpeningKill.Username}}
+  <h3 style="margin-top:14px;">Opening Kill</h3>
+  <div class="kv" style="max-width:400px;">
+    <span class="kv-key">Attacker</span><span class="kv-val">{{.OpeningKill.Username}}</span>
+    <span class="kv-key">Target</span><span class="kv-val">{{.OpeningKill.Target}}</span>
+    <span class="kv-key">Time</span><span class="kv-val">{{.OpeningKill.Time}}</span>
+    <span class="kv-key">Headshot</span><span class="kv-val">{{derefBool .OpeningKill.Headshot}}</span>
+    <span class="kv-key">Operator</span><span class="kv-val">{{.OpeningKill.Operator}}</span>
+  </div>
+  {{end}}
+
+  {{if .OpeningDeath.Username}}
+  <h3 style="margin-top:14px;">Opening Death</h3>
+  <div class="kv" style="max-width:400px;">
+    <span class="kv-key">Player</span><span class="kv-val">{{.OpeningDeath.Username}}</span>
+    <span class="kv-key">Time</span><span class="kv-val">{{.OpeningDeath.Time}}</span>
+    <span class="kv-key">Operator</span><span class="kv-val">{{.OpeningDeath.Operator}}</span>
+  </div>
+  {{end}}
+
+  {{else}}
+  <span class="dim">No match events recorded.</span>
+  {{end}}
+</div>
+{{end}}
+
+
+{{define "tradesSection"}}
+{{if .Trades}}
+<div class="section">
+  <div class="section-title">Trades ({{len .Trades}})</div>
+  {{range $i, $trade := .Trades}}
+  <div style="margin-bottom:8px; padding:8px; background:var(--panel2); border:1px solid var(--border);">
+    <span class="dim">Trade {{add $i 1}}:</span>
+    {{range $j, $ev := $trade}}
+    <div style="margin-left:12px; margin-top:2px;">
+      <span class="kv-key">{{eventTypeName $ev.Type}}</span>
+      {{if $ev.Username}}<strong>{{$ev.Username}}</strong>{{end}}
+      {{if $ev.Target}} → {{$ev.Target}}{{end}}
+      <span class="dim">@ {{$ev.Time}}</span>
+      {{if $ev.Headshot}}{{if derefBool $ev.Headshot | eq "Yes"}}<span class="hs-yes">[HS]</span>{{end}}{{end}}
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+{{end}}
+
+
+{{define "statsSection"}}
+{{if .RoundStats}}
+<div class="section">
+  <div class="section-title">Per-Round Player Stats</div>
+  <div class="tbl-wrap">
+  <table>
+    <tr>
+      <th>Username</th><th>Team</th><th>Operator</th><th>Score</th>
+      <th>Kills</th><th>Died</th><th>Assists</th>
+      <th>Headshots</th><th>HS%</th><th>1vX</th>
+    </tr>
+    {{range .RoundStats}}
+    <tr>
+      <td>{{.Username}}</td>
+      <td>{{.TeamIndex}}</td>
+      <td>{{if .Operator}}{{.Operator}}{{else}}<span class="dim">—</span>{{end}}</td>
+      <td>{{.Score}}</td>
+      <td>{{.Kills}}</td>
+      <td class="{{if .Died}}died-yes{{end}}">{{if .Died}}Yes{{else}}No{{end}}</td>
+      <td>{{.Assists}}</td>
+      <td>{{.Headshots}}</td>
+      <td>{{formatFloat .HeadshotPercentage}}%</td>
+      <td>{{if .OneVx}}{{.OneVx}}{{else}}<span class="dim">—</span>{{end}}</td>
+    </tr>
+    {{end}}
+  </table>
+  </div>
+</div>
+{{end}}
+{{end}}
+
+
+{{define "scoreboardSection"}}
+{{if .ScoreboardEntries}}
+<div class="section">
+  <div class="section-title">Scoreboard</div>
+  <div class="tbl-wrap">
+  <table>
+    <tr>
+      <th>Username (resolved)</th><th>Score</th><th>Assists</th><th>Assists (Round)</th><th>DissectID</th>
+    </tr>
+    {{range .ScoreboardEntries}}
+    <tr>
+      <td>{{if .Username}}{{.Username}}{{else}}<span class="dim">unknown</span>{{end}}</td>
+      <td>{{.Player.Score}}</td>
+      <td>{{.Player.Assists}}</td>
+      <td>{{.Player.AssistsFromRound}}</td>
+      <td class="dim">{{formatHex .Player.ID}}</td>
+    </tr>
+    {{end}}
+  </table>
+  </div>
+</div>
+{{end}}
+{{end}}
+
+
+{{define "matchView"}}
+<div class="section">
+  <div class="section-title">Match Overview</div>
+  <div class="kv" style="max-width:400px;">
+    <span class="kv-key">Total Rounds</span><span class="kv-val">{{.NumRounds}}</span>
+    <span class="kv-key">Source Path</span><span class="kv-val dim">{{.SourcePath}}</span>
+  </div>
+</div>
+
+{{if .MatchStats}}
+<div class="section">
+  <div class="section-title">Match Player Stats (Aggregate)</div>
+  <div class="tbl-wrap">
+  <table>
+    <tr>
+      <th>Username</th><th>Team</th><th>Rounds</th><th>Kills</th>
+      <th>Deaths</th><th>Assists</th><th>Headshots</th><th>HS%</th>
+    </tr>
+    {{range .MatchStats}}
+    <tr>
+      <td>{{.Username}}</td>
+      <td>{{.TeamIndex}}</td>
+      <td>{{.Rounds}}</td>
+      <td>{{.Kills}}</td>
+      <td>{{.Deaths}}</td>
+      <td>{{.Assists}}</td>
+      <td>{{.Headshots}}</td>
+      <td>{{formatFloat .HeadshotPercentage}}%</td>
+    </tr>
+    {{end}}
+  </table>
+  </div>
+</div>
+{{end}}
+
+<div class="section">
+  <div class="section-title">Exports</div>
+  <div class="exports">
+    <form method="POST" action="/export/json/match">
+      <input type="hidden" name="path" value="{{.SourcePath}}">
+      <button class="sec">Download Match JSON</button>
+    </form>
+    <form method="POST" action="/export/excel">
+      <input type="hidden" name="path" value="{{.SourcePath}}">
+      <button class="sec">Download Excel</button>
+    </form>
+  </div>
+</div>
+
+{{if .FirstRound}}
+<div class="section">
+  <div class="section-title">First Round</div>
+  {{template "roundView" .FirstRound}}
+</div>
+{{end}}
+
+{{if .LastRound}}
+<div class="section">
+  <div class="section-title">Last Round</div>
+  {{template "roundView" .LastRound}}
+</div>
+{{end}}
+
+{{if .Rounds}}
+<div class="section">
+  <div class="section-title">All Rounds ({{.NumRounds}})</div>
+  <div class="tabs" id="round-tabs">
+    {{range $i, $r := .Rounds}}
+    <button class="tab-btn {{if eq $i 0}}active{{end}}" data-group="rounds" onclick="switchTab('rounds', {{$i}})">
+      R{{add $i 1}}
+    </button>
+    {{end}}
+  </div>
+  {{range $i, $r := .Rounds}}
+  <div class="tab-pane {{if eq $i 0}}active{{end}}" data-group="rounds">
+    {{template "roundView" $r}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+{{end}}
+
+</body>
+</html>
+
+{{define "analyzeView"}}
+{{if .Error}}<div class="error">ERROR: {{.Error}}</div>{{end}}
+
+<div class="section">
+  <div class="section-title">Binary File Info</div>
+  <div class="kv" style="max-width:500px;">
+    <span class="kv-key">Path</span><span class="kv-val dim">{{.SourcePath}}</span>
+    <span class="kv-key">Raw (.rec) size</span><span class="kv-val">{{.RawFileSize}} bytes</span>
+    <span class="kv-key">Decompressed size</span><span class="kv-val">{{.DecompSize}} bytes</span>
+    <span class="kv-key">Map</span><span class="kv-val">{{.MapName}}</span>
+    <span class="kv-key">Game version</span><span class="kv-val">{{.GameVersion}}</span>
+  </div>
+</div>
+
+<div class="section info-box">
+  <strong>Cheat Engine workflow for finding player position/rotation:</strong><br>
+  1. Launch R6 Siege, start a custom game on the same map<br>
+  2. Open CE → attach to <strong>RainbowSix_Vulkan.exe</strong> (or RainbowSix.exe)<br>
+  3. Value type: <strong>Float</strong> &nbsp;|&nbsp; Scan type: <strong>Exact Value</strong><br>
+  4. Find your <strong>Y (height)</strong> first — stand still on flat ground, scan ~1.5. Jump, rescan for new value. Repeat until narrowed down<br>
+  5. Right-click result → <em>Browse this memory region</em> — look for XYZ as 3 consecutive floats<br>
+  6. Note the <strong>4–8 bytes immediately BEFORE</strong> the XYZ triplet — this is likely a marker/type byte we can use as a Listen() pattern<br>
+  7. Enter that X, Y, or Z value in the float finder below to locate it in the replay binary<br>
+  8. Compare surrounding bytes in CE memory vs. replay binary to identify the packet structure
+</div>
+
+{{if .HexPreview}}
+<div class="section">
+  <div class="section-title">Decompressed Binary — First 256 bytes</div>
+  <div class="hex-dump">{{.HexPreview}}</div>
+</div>
+{{end}}
+
+{{if .FloatHits}}
+<div class="section">
+  <div class="section-title">Float Search: {{.FloatTarget}} ±{{.FloatTarget}} — {{len .FloatHits}} hits{{if .TruncatedAt}} (capped at {{.TruncatedAt}}){{end}}</div>
+  <div class="info-box" style="margin-bottom:8px;">
+    For each hit: <strong>offset</strong> is the byte position in the decompressed binary. Check if <strong>Prev/Next/Next2</strong> look like plausible X,Y,Z coordinates. If the same <em>Before8</em> pattern appears across multiple hits, that prefix is your marker byte pattern.
+  </div>
+  {{range .FloatHits}}
+  <div class="float-hit">
+    <span class="fh-offset">0x{{printf "%08x" .Offset}} ({{.Offset}})</span>
+    &nbsp;|&nbsp; value: <span class="fh-val">{{formatF32 .Value}}</span>
+    &nbsp;| hex: <span class="fh-ctx">{{.Hex}}</span>
+    &nbsp;| prev: <span class="fh-adj">{{formatF32 .Prev}}</span>
+    &nbsp;| next: <span class="fh-adj">{{formatF32 .Next}}</span>
+    &nbsp;| next+1: <span class="fh-adj">{{formatF32 .Next2}}</span><br>
+    <span class="fh-ctx">before[8]: {{.Before8}}&nbsp;&nbsp;after[8]: {{.After8}}</span>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{if .Vec3Hits}}
+<div class="section">
+  <div class="section-title">Vec3 Candidates (XYZ plausibility scan) — {{len .Vec3Hits}} hits{{if .TruncatedAt}} (capped at {{.TruncatedAt}}){{end}}</div>
+  <div class="info-box" style="margin-bottom:8px;">
+    These are consecutive float32 triplets where <strong style="color:#f99">X</strong> and <strong style="color:#99f">Z</strong> are in [-1500, 1500] and <strong style="color:#9f9">Y</strong> is in [-150, 300]. May include many false positives — cross-reference against known CE coordinates to confirm.
+  </div>
+  <div class="tbl-wrap">
+  <table>
+    <tr><th>Offset</th><th>X</th><th>Y</th><th>Z</th></tr>
+    {{range .Vec3Hits}}
+    <tr class="vec3-row">
+      <td class="dim">0x{{printf "%08x" .Offset}} ({{.Offset}})</td>
+      <td class="x">{{formatF32 .X}}</td>
+      <td class="y">{{formatF32 .Y}}</td>
+      <td class="z">{{formatF32 .Z}}</td>
+    </tr>
+    {{end}}
+  </table>
+  </div>
+</div>
+{{end}}
+
+{{if .HexPatternHits}}
+<div class="section">
+  <div class="section-title">Custom Hex Pattern: "{{.HexPattern}}" — {{len .HexPatternHits}} hits</div>
+  <div class="info-box" style="margin-bottom:8px;">Each hit shows the 16 bytes before and 48 bytes after your pattern. The <strong>AfterF32</strong> column decodes the following bytes as consecutive float32s — look for values that match map coordinates or angle ranges (yaw 0–360, pitch ±90).</div>
+  {{range .HexPatternHits}}
+  <div class="float-hit">
+    <span class="fh-offset">0x{{printf "%08x" .Offset}} ({{.Offset}})</span><br>
+    <span class="fh-ctx">before[16]: {{.Before16}}</span><br>
+    <span class="fh-ctx">after [48]: {{.After48}}</span><br>
+    <span class="fh-adj">floats: {{range $i, $f := .AfterF32}}{{if $i}} | {{end}}{{$f}}{{end}}</span>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+{{if .PatternContexts}}
+<div class="section">
+  <div class="section-title">Timer-Tick Contexts (pattern 1f07efc9) — {{len .PatternContexts}} ticks shown</div>
+  <div class="info-box" style="margin-bottom:8px;">
+    The timer pattern fires every game tick. The bytes <em>after</em> each tick likely contain position/rotation data. Look for <strong>AfterF32 values</strong> that fall in map coordinate ranges (XZ ≈ ±1000, Y ≈ 0–50) or angle ranges (yaw 0–360, pitch ±90). If you see the <em>same float changing slowly</em> across ticks, that is almost certainly a moving value (position or rotation).
+  </div>
+  <div class="tbl-wrap">
+  <table style="font-size:11px;">
+    <tr>
+      <th>Offset</th><th>Before[16]</th>
+      {{range $i, $_ := (index $.PatternContexts 0).AfterF32}}<th>f{{$i}}</th>{{end}}
+    </tr>
+    {{range .PatternContexts}}
+    <tr>
+      <td class="dim">0x{{printf "%x" .Offset}}</td>
+      <td class="fh-ctx" style="font-size:10px;">{{.Before16}}</td>
+      {{range .AfterF32}}<td class="fh-adj">{{.}}</td>{{end}}
+    </tr>
+    {{end}}
+  </table>
+  </div>
+</div>
+{{end}}
+
+{{if .StrideAnalysis}}
+<div class="section">
+  <div class="section-title">Vec3 Stride Analysis — top {{len .StrideAnalysis}} recurring intervals</div>
+  <div class="info-box" style="margin-bottom:8px;">
+    A <strong>high-count stride</strong> means Vec3 triplets repeat at that fixed byte distance — this is a <em>position update stream</em>. The stride value = packet size in bytes. E.g. stride=48 means each position packet is 48 bytes.
+  </div>
+  <table style="max-width:300px;">
+    <tr><th>Stride (bytes)</th><th>Occurrences</th></tr>
+    {{range .StrideAnalysis}}
+    <tr>
+      <td class="fh-val">{{.Stride}}</td>
+      <td>{{.Count}}</td>
+    </tr>
+    {{end}}
+  </table>
+</div>
+{{end}}
+
+{{if .EntityTracks}}
+<div class="section">
+  <div class="section-title">Entity Position/Rotation Tracks — {{len .EntityTracks}} entities</div>
+  <div class="info-box" style="margin-bottom:8px;">
+    Extracted using reverse-engineered packet format:<br>
+    <code>[frame_id 4B] [entity_id 4B] [00 00 00 00] [00 00 00 00] [X f32] [Y f32] [Z f32] [qx f32] [qy f32] [qz f32] [qw f32]</code><br>
+    Yaw = <code>2 × atan2(qz, qw) × 180/π</code>
+  </div>
+  {{range .EntityTracks}}
+  <details style="margin-bottom:12px;">
+    <summary style="cursor:pointer; color:var(--accent2); padding:6px 0;">
+      Entity <code>{{.EntityHex}}</code> (ID: {{.EntityID}}) — {{len .Frames}} position frames
+    </summary>
+    <div style="overflow-x:auto; margin-top:6px;">
+    <table>
+      <tr>
+        <th>Offset</th><th>X</th><th>Y</th><th>Z</th>
+        <th>qx</th><th>qy</th><th>qz</th><th>qw</th>
+        <th>Yaw°</th>
+      </tr>
+      {{range .Frames}}
+      <tr>
+        <td class="mono">0x{{printf "%08X" .Offset}}</td>
+        <td class="fh-val">{{formatF32 .X}}</td>
+        <td class="fh-val">{{formatF32 .Y}}</td>
+        <td class="fh-val">{{formatF32 .Z}}</td>
+        <td class="fh-adj">{{formatF32 .Qx}}</td>
+        <td class="fh-adj">{{formatF32 .Qy}}</td>
+        <td class="fh-adj">{{formatF32 .Qz}}</td>
+        <td class="fh-adj">{{formatF32 .Qw}}</td>
+        <td class="fh-val">{{formatF32 .YawDeg}}</td>
+      </tr>
+      {{end}}
+    </table>
+    </div>
+  </details>
+  {{end}}
+</div>
+{{end}}
+
+{{if and (not .FloatHits) (not .Vec3Hits) (not .HexPatternHits) (not .Error) .DecompSize}}
+<div class="section"><span class="dim">Enter a float value to search, enable "Scan Vec3 + strides", or paste a hex pattern from CE.</span></div>
+{{end}}
+{{end}}
