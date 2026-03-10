@@ -9,17 +9,21 @@ import (
 
 type BlenderCameraOptions struct {
 	MovementOptions
-	Track        string
-	FPS          int
-	FrameStep    int
-	Scale        float64
-	RotationMode string
-	YawAxis      string
-	PitchAxis    string
-	RollAxis     string
-	YawSign      float64
-	PitchSign    float64
-	RollSign     float64
+	Track          string
+	FPS            int
+	FrameStep      int
+	Scale          float64
+	RotationMode   string
+	YawAxis        string
+	PitchAxis      string
+	RollAxis       string
+	YawSign        float64
+	PitchSign      float64
+	RollSign       float64
+	LevelCamera    bool
+	YawOffsetDeg   float64
+	PitchOffsetDeg float64
+	RollOffsetDeg  float64
 }
 
 func (r *Reader) BlenderCameraScriptOptions(options BlenderCameraOptions) (string, error) {
@@ -41,7 +45,7 @@ func (r *Reader) blenderCameraMovementOutputs(options BlenderCameraOptions) ([]M
 		return nil, err
 	}
 	outputs := []MovementOutput{base}
-	if options.PositionPropID != "" || options.RotationPropID != "" || !blenderShouldScanCandidateProps(base.Header, options.Track) {
+	if options.PositionPropID != "" || options.RotationPropID != "" || !blenderShouldScanCandidateProps(base.Header, options.Track) || blenderHasObviousCameraTrack(base, options.Track) {
 		return outputs, nil
 	}
 	seen := map[string]bool{base.PositionPropID + ":" + base.RotationPropID: true}
@@ -79,6 +83,32 @@ func (r *Reader) blenderCameraMovementOutputs(options BlenderCameraOptions) ([]M
 		addOutput(base.PositionPropID, candidate.PropID)
 	}
 	return outputs, nil
+}
+
+func blenderHasObviousCameraTrack(data MovementOutput, selector string) bool {
+	tracks := data.PrimaryTracks
+	if len(tracks) == 0 {
+		tracks = data.Tracks
+	}
+	if len(tracks) <= 1 {
+		return true
+	}
+	selector = strings.TrimSpace(selector)
+	if selector != "" {
+		_, err := selectBlenderCameraTrackWithFallback(data, selector, false)
+		return err == nil
+	}
+	recording := data.Header.RecordingPlayer()
+	if recording.Username == "" {
+		return false
+	}
+	resolved := 0
+	for _, track := range tracks {
+		if strings.EqualFold(track.PlayerNameGuess, recording.Username) {
+			resolved++
+		}
+	}
+	return resolved == 1
 }
 
 func chooseBlenderCameraOutput(outputs []MovementOutput, selector string) (MovementOutput, MovementTrack, error) {
@@ -253,12 +283,17 @@ func chooseBlenderCameraOutputPass(outputs []MovementOutput, selector string, al
 func renderBlenderCameraScript(data MovementOutput, track MovementTrack, options BlenderCameraOptions) string {
 	cameraBaseName := sanitizeBlenderName(blenderTrackDisplayName(track))
 	cameraName := "R6Cam_" + cameraBaseName
+	rigName := "R6Rig_" + cameraBaseName
+	boundsName := "R6Bounds_" + cameraBaseName
 	collectionName := "R6 Replay Cameras"
+	bounds := blenderTrackBounds(track)
 	var builder strings.Builder
 	builder.WriteString("import bpy\n")
 	builder.WriteString("import math\n\n")
 	fmt.Fprintf(&builder, "COLLECTION_NAME = %q\n", collectionName)
 	fmt.Fprintf(&builder, "CAMERA_NAME = %q\n", cameraName)
+	fmt.Fprintf(&builder, "RIG_NAME = %q\n", rigName)
+	fmt.Fprintf(&builder, "BOUNDS_NAME = %q\n", boundsName)
 	fmt.Fprintf(&builder, "TRACK_NAME = %q\n", blenderTrackDisplayName(track))
 	fmt.Fprintf(&builder, "TRACK_LABEL = %q\n", track.Label)
 	fmt.Fprintf(&builder, "PLAYER_GUESS = %q\n", track.PlayerNameGuess)
@@ -266,9 +301,28 @@ func renderBlenderCameraScript(data MovementOutput, track MovementTrack, options
 	fmt.Fprintf(&builder, "POSITION_PROP_ID = %q\n", data.PositionPropID)
 	fmt.Fprintf(&builder, "ROTATION_PROP_ID = %q\n", data.RotationPropID)
 	fmt.Fprintf(&builder, "ROTATION_MODE = %q\n", options.RotationMode)
+	fmt.Fprintf(&builder, "LEVEL_CAMERA = %t\n", options.LevelCamera)
+	fmt.Fprintf(&builder, "YAW_OFFSET_DEG = %s\n", blenderFloatString(options.YawOffsetDeg))
+	fmt.Fprintf(&builder, "PITCH_OFFSET_DEG = %s\n", blenderFloatString(options.PitchOffsetDeg))
+	fmt.Fprintf(&builder, "ROLL_OFFSET_DEG = %s\n", blenderFloatString(options.RollOffsetDeg))
 	fmt.Fprintf(&builder, "FPS = %d\n", options.FPS)
 	fmt.Fprintf(&builder, "FRAME_STEP = %d\n", options.FrameStep)
 	fmt.Fprintf(&builder, "LOCATION_SCALE = %s\n\n", blenderFloatString(options.Scale))
+	if bounds != nil {
+		fmt.Fprintf(&builder, "BOUNDS_MIN = (%s, %s, %s)\n",
+			blenderFloatString(float64(bounds.Min.X)*options.Scale),
+			blenderFloatString(float64(bounds.Min.Y)*options.Scale),
+			blenderFloatString(float64(bounds.Min.Z)*options.Scale),
+		)
+		fmt.Fprintf(&builder, "BOUNDS_MAX = (%s, %s, %s)\n\n",
+			blenderFloatString(float64(bounds.Max.X)*options.Scale),
+			blenderFloatString(float64(bounds.Max.Y)*options.Scale),
+			blenderFloatString(float64(bounds.Max.Z)*options.Scale),
+		)
+	} else {
+		builder.WriteString("BOUNDS_MIN = None\n")
+		builder.WriteString("BOUNDS_MAX = None\n\n")
+	}
 	builder.WriteString("def ensure_collection(name):\n")
 	builder.WriteString("    collection = bpy.data.collections.get(name)\n")
 	builder.WriteString("    if collection is None:\n")
@@ -282,25 +336,80 @@ func renderBlenderCameraScript(data MovementOutput, track MovementTrack, options
 	builder.WriteString("def keyframe_prop(obj, key, value, frame):\n")
 	builder.WriteString("    obj[key] = value\n")
 	builder.WriteString("    obj.keyframe_insert(data_path=f'[\"{key}\"]', frame=frame)\n\n")
+	builder.WriteString("def create_bounds_object(name, bounds_min, bounds_max, collection):\n")
+	builder.WriteString("    if bounds_min is None or bounds_max is None:\n")
+	builder.WriteString("        return None\n")
+	builder.WriteString("    min_x, min_y, min_z = bounds_min\n")
+	builder.WriteString("    max_x, max_y, max_z = bounds_max\n")
+	builder.WriteString("    verts = [\n")
+	builder.WriteString("        (min_x, min_y, min_z),\n")
+	builder.WriteString("        (max_x, min_y, min_z),\n")
+	builder.WriteString("        (max_x, max_y, min_z),\n")
+	builder.WriteString("        (min_x, max_y, min_z),\n")
+	builder.WriteString("        (min_x, min_y, max_z),\n")
+	builder.WriteString("        (max_x, min_y, max_z),\n")
+	builder.WriteString("        (max_x, max_y, max_z),\n")
+	builder.WriteString("        (min_x, max_y, max_z),\n")
+	builder.WriteString("    ]\n")
+	builder.WriteString("    edges = [\n")
+	builder.WriteString("        (0, 1), (1, 2), (2, 3), (3, 0),\n")
+	builder.WriteString("        (4, 5), (5, 6), (6, 7), (7, 4),\n")
+	builder.WriteString("        (0, 4), (1, 5), (2, 6), (3, 7),\n")
+	builder.WriteString("    ]\n")
+	builder.WriteString("    mesh = bpy.data.meshes.new(name)\n")
+	builder.WriteString("    mesh.from_pydata(verts, edges, [])\n")
+	builder.WriteString("    mesh.update()\n")
+	builder.WriteString("    obj = bpy.data.objects.new(name, mesh)\n")
+	builder.WriteString("    obj.display_type = 'WIRE'\n")
+	builder.WriteString("    obj.hide_render = True\n")
+	builder.WriteString("    collection.objects.link(obj)\n")
+	builder.WriteString("    return obj\n\n")
 	builder.WriteString("collection = ensure_collection(COLLECTION_NAME)\n")
 	builder.WriteString("remove_existing_object(CAMERA_NAME)\n")
+	builder.WriteString("remove_existing_object(RIG_NAME)\n")
+	builder.WriteString("remove_existing_object(BOUNDS_NAME)\n")
+	builder.WriteString("rig = bpy.data.objects.new(RIG_NAME, None)\n")
+	builder.WriteString("rig.empty_display_type = 'PLAIN_AXES'\n")
+	builder.WriteString("rig.empty_display_size = 0.5\n")
+	builder.WriteString("rig.rotation_mode = 'XYZ'\n")
+	builder.WriteString("collection.objects.link(rig)\n")
 	builder.WriteString("camera_data = bpy.data.cameras.new(CAMERA_NAME)\n")
 	builder.WriteString("camera = bpy.data.objects.new(CAMERA_NAME, camera_data)\n")
 	builder.WriteString("camera.rotation_mode = 'XYZ'\n")
 	builder.WriteString("camera.data.clip_end = 10000\n")
+	builder.WriteString("camera.parent = rig\n")
+	builder.WriteString("camera.location = (0, 0, 0)\n")
+	builder.WriteString("camera.rotation_euler = (0, 0, 0)\n")
 	builder.WriteString("collection.objects.link(camera)\n")
+	builder.WriteString("bounds = create_bounds_object(BOUNDS_NAME, BOUNDS_MIN, BOUNDS_MAX, collection)\n")
 	builder.WriteString("scene = bpy.context.scene\n")
 	builder.WriteString("scene.camera = camera\n")
 	builder.WriteString("scene.render.fps = FPS\n")
-	builder.WriteString("camera['r6_track_name'] = TRACK_NAME\n")
-	builder.WriteString("camera['r6_track_label'] = TRACK_LABEL\n")
-	builder.WriteString("camera['r6_player_guess'] = PLAYER_GUESS\n")
-	builder.WriteString("camera['r6_actor_id'] = ACTOR_ID\n")
-	builder.WriteString("camera['r6_position_prop'] = POSITION_PROP_ID\n")
-	builder.WriteString("camera['r6_rotation_prop'] = ROTATION_PROP_ID\n")
-	builder.WriteString("camera['r6_rotation_mode'] = ROTATION_MODE\n")
-	builder.WriteString("camera['r6_frame_step'] = FRAME_STEP\n")
-	builder.WriteString("camera['r6_scale'] = LOCATION_SCALE\n\n")
+	builder.WriteString("camera['r6_rig_name'] = RIG_NAME\n")
+	builder.WriteString("rig['r6_track_name'] = TRACK_NAME\n")
+	builder.WriteString("rig['r6_track_label'] = TRACK_LABEL\n")
+	builder.WriteString("rig['r6_player_guess'] = PLAYER_GUESS\n")
+	builder.WriteString("rig['r6_actor_id'] = ACTOR_ID\n")
+	builder.WriteString("rig['r6_position_prop'] = POSITION_PROP_ID\n")
+	builder.WriteString("rig['r6_rotation_prop'] = ROTATION_PROP_ID\n")
+	builder.WriteString("rig['r6_rotation_mode'] = ROTATION_MODE\n")
+	builder.WriteString("rig['r6_level_camera'] = LEVEL_CAMERA\n")
+	builder.WriteString("rig['r6_yaw_offset_deg'] = YAW_OFFSET_DEG\n")
+	builder.WriteString("rig['r6_pitch_offset_deg'] = PITCH_OFFSET_DEG\n")
+	builder.WriteString("rig['r6_roll_offset_deg'] = ROLL_OFFSET_DEG\n")
+	builder.WriteString("rig['r6_frame_step'] = FRAME_STEP\n")
+	builder.WriteString("rig['r6_scale'] = LOCATION_SCALE\n\n")
+	builder.WriteString("if bounds is not None:\n")
+	builder.WriteString("    bounds['r6_track_name'] = TRACK_NAME\n")
+	builder.WriteString("    bounds['r6_player_guess'] = PLAYER_GUESS\n")
+	builder.WriteString("    bounds['r6_bounds_min_x'] = BOUNDS_MIN[0]\n")
+	builder.WriteString("    bounds['r6_bounds_min_y'] = BOUNDS_MIN[1]\n")
+	builder.WriteString("    bounds['r6_bounds_min_z'] = BOUNDS_MIN[2]\n")
+	builder.WriteString("    bounds['r6_bounds_max_x'] = BOUNDS_MAX[0]\n")
+	builder.WriteString("    bounds['r6_bounds_max_y'] = BOUNDS_MAX[1]\n")
+	builder.WriteString("    bounds['r6_bounds_max_z'] = BOUNDS_MAX[2]\n\n")
+	viewHeadingWrapped := blenderWrappedViewingHeadingDegrees(track.Samples)
+	viewHeadingContinuous := blenderContinuousViewingHeadingDegrees(track.Samples)
 	lastFrame := 1
 	for index, sample := range track.Samples {
 		frame := 1 + (index * options.FrameStep)
@@ -308,39 +417,50 @@ func renderBlenderCameraScript(data MovementOutput, track MovementTrack, options
 		position := blenderSamplePosition(sample)
 		rawRotation := blenderSampleRawRotation(sample)
 		degreeRotation := blenderSampleDegreeRotation(sample)
-		cameraRotation := blenderCameraEuler(sample, options)
-		fmt.Fprintf(&builder, "camera.location = (%s, %s, %s)\n",
+		var headingRadians *float64
+		if index < len(viewHeadingContinuous) && viewHeadingContinuous[index] != nil {
+			value := degreesToRadians(*viewHeadingContinuous[index])
+			headingRadians = &value
+		}
+		cameraRotation := blenderCameraEuler(sample, options, headingRadians)
+		fmt.Fprintf(&builder, "rig.location = (%s, %s, %s)\n",
 			blenderFloatString(float64(position.X)*options.Scale),
 			blenderFloatString(float64(position.Y)*options.Scale),
 			blenderFloatString(float64(position.Z)*options.Scale),
 		)
-		fmt.Fprintf(&builder, "camera.rotation_euler = (%s, %s, %s)\n",
+		fmt.Fprintf(&builder, "rig.rotation_euler = (%s, %s, %s)\n",
 			blenderFloatString(cameraRotation.X),
 			blenderFloatString(cameraRotation.Y),
 			blenderFloatString(cameraRotation.Z),
 		)
-		fmt.Fprintf(&builder, "camera.keyframe_insert(data_path='location', frame=%d)\n", frame)
-		fmt.Fprintf(&builder, "camera.keyframe_insert(data_path='rotation_euler', frame=%d)\n", frame)
-		fmt.Fprintf(&builder, "keyframe_prop(camera, 'r6_raw_rot_x', %s, %d)\n", blenderFloatString(float64(rawRotation.X)), frame)
-		fmt.Fprintf(&builder, "keyframe_prop(camera, 'r6_raw_rot_y', %s, %d)\n", blenderFloatString(float64(rawRotation.Y)), frame)
-		fmt.Fprintf(&builder, "keyframe_prop(camera, 'r6_raw_rot_z', %s, %d)\n", blenderFloatString(float64(rawRotation.Z)), frame)
-		fmt.Fprintf(&builder, "keyframe_prop(camera, 'r6_deg_rot_x', %s, %d)\n", blenderFloatString(float64(degreeRotation.X)), frame)
-		fmt.Fprintf(&builder, "keyframe_prop(camera, 'r6_deg_rot_y', %s, %d)\n", blenderFloatString(float64(degreeRotation.Y)), frame)
-		fmt.Fprintf(&builder, "keyframe_prop(camera, 'r6_deg_rot_z', %s, %d)\n", blenderFloatString(float64(degreeRotation.Z)), frame)
-		fmt.Fprintf(&builder, "keyframe_prop(camera, 'r6_sample_offset', %d, %d)\n", sample.Offset, frame)
+		fmt.Fprintf(&builder, "rig.keyframe_insert(data_path='location', frame=%d)\n", frame)
+		fmt.Fprintf(&builder, "rig.keyframe_insert(data_path='rotation_euler', frame=%d)\n", frame)
+		fmt.Fprintf(&builder, "keyframe_prop(rig, 'r6_raw_rot_x', %s, %d)\n", blenderFloatString(float64(rawRotation.X)), frame)
+		fmt.Fprintf(&builder, "keyframe_prop(rig, 'r6_raw_rot_y', %s, %d)\n", blenderFloatString(float64(rawRotation.Y)), frame)
+		fmt.Fprintf(&builder, "keyframe_prop(rig, 'r6_raw_rot_z', %s, %d)\n", blenderFloatString(float64(rawRotation.Z)), frame)
+		fmt.Fprintf(&builder, "keyframe_prop(rig, 'r6_deg_rot_x', %s, %d)\n", blenderFloatString(float64(degreeRotation.X)), frame)
+		fmt.Fprintf(&builder, "keyframe_prop(rig, 'r6_deg_rot_y', %s, %d)\n", blenderFloatString(float64(degreeRotation.Y)), frame)
+		fmt.Fprintf(&builder, "keyframe_prop(rig, 'r6_deg_rot_z', %s, %d)\n", blenderFloatString(float64(degreeRotation.Z)), frame)
+		if index < len(viewHeadingWrapped) && viewHeadingWrapped[index] != nil {
+			fmt.Fprintf(&builder, "keyframe_prop(rig, 'r6_view_heading_deg', %s, %d)\n", blenderFloatString(*viewHeadingWrapped[index]), frame)
+		}
+		if index < len(viewHeadingContinuous) && viewHeadingContinuous[index] != nil {
+			fmt.Fprintf(&builder, "keyframe_prop(rig, 'r6_view_heading_continuous_deg', %s, %d)\n", blenderFloatString(*viewHeadingContinuous[index]), frame)
+		}
+		fmt.Fprintf(&builder, "keyframe_prop(rig, 'r6_sample_offset', %d, %d)\n", sample.Offset, frame)
 		if sample.TimeInSeconds != nil {
-			fmt.Fprintf(&builder, "keyframe_prop(camera, 'r6_time_seconds', %s, %d)\n", blenderFloatString(*sample.TimeInSeconds), frame)
+			fmt.Fprintf(&builder, "keyframe_prop(rig, 'r6_time_seconds', %s, %d)\n", blenderFloatString(*sample.TimeInSeconds), frame)
 		}
 		builder.WriteString("\n")
 	}
 	builder.WriteString("scene.frame_start = 1\n")
 	fmt.Fprintf(&builder, "scene.frame_end = %d\n", lastFrame)
-	builder.WriteString("if camera.animation_data and camera.animation_data.action:\n")
-	builder.WriteString("    for fcurve in camera.animation_data.action.fcurves:\n")
+	builder.WriteString("if rig.animation_data and rig.animation_data.action:\n")
+	builder.WriteString("    for fcurve in rig.animation_data.action.fcurves:\n")
 	builder.WriteString("        for keyframe in fcurve.keyframe_points:\n")
 	builder.WriteString("            keyframe.interpolation = 'LINEAR'\n")
 	builder.WriteString("\n")
-	builder.WriteString("print(f'Imported {TRACK_NAME} into Blender as {CAMERA_NAME}')\n")
+	builder.WriteString("print(f'Imported {TRACK_NAME} into Blender as {RIG_NAME} -> {CAMERA_NAME}')\n")
 	return builder.String()
 }
 
@@ -410,17 +530,63 @@ func blenderSampleDegreeRotation(sample MovementSample) Vector3 {
 	return Vector3{}
 }
 
+func blenderTrackBounds(track MovementTrack) *MovementBounds {
+	if track.Bounds != nil {
+		return track.Bounds
+	}
+	var bounds *MovementBounds
+	for _, sample := range track.Samples {
+		if sample.Position == nil {
+			continue
+		}
+		pos := *sample.Position
+		if bounds == nil {
+			bounds = &MovementBounds{Min: pos, Max: pos}
+			continue
+		}
+		if pos.X < bounds.Min.X {
+			bounds.Min.X = pos.X
+		}
+		if pos.Y < bounds.Min.Y {
+			bounds.Min.Y = pos.Y
+		}
+		if pos.Z < bounds.Min.Z {
+			bounds.Min.Z = pos.Z
+		}
+		if pos.X > bounds.Max.X {
+			bounds.Max.X = pos.X
+		}
+		if pos.Y > bounds.Max.Y {
+			bounds.Max.Y = pos.Y
+		}
+		if pos.Z > bounds.Max.Z {
+			bounds.Max.Z = pos.Z
+		}
+	}
+	return bounds
+}
+
 type blenderEuler struct {
 	X float64
 	Y float64
 	Z float64
 }
 
-func blenderCameraEuler(sample MovementSample, options BlenderCameraOptions) blenderEuler {
+func blenderCameraEuler(sample MovementSample, options BlenderCameraOptions, headingRadians *float64) blenderEuler {
+	pitch := options.PitchSign * blenderRotationValue(sample, options.PitchAxis, options.RotationMode)
+	roll := options.RollSign * blenderRotationValue(sample, options.RollAxis, options.RotationMode)
+	yaw := options.YawSign * blenderYawValue(sample, options.RotationMode, headingRadians)
+	if headingRadians != nil && options.LevelCamera {
+		pitch = 0
+		roll = 0
+	}
+	pitch += degreesToRadians(options.PitchOffsetDeg)
+	roll += degreesToRadians(options.RollOffsetDeg)
+	yaw += degreesToRadians(options.YawOffsetDeg)
 	return blenderEuler{
-		X: options.PitchSign * blenderRotationValue(sample, options.PitchAxis, options.RotationMode),
-		Y: options.RollSign * blenderRotationValue(sample, options.RollAxis, options.RotationMode),
-		Z: options.YawSign * blenderRotationValue(sample, options.YawAxis, options.RotationMode),
+		X: pitch,
+		Y: roll,
+		Z: yaw,
 	}
 }
 
@@ -442,6 +608,60 @@ func blenderRotationValue(sample MovementSample, axis string, mode string) float
 		return wrapRadians(float64(blenderAxisComponent(*sample.Rotation, axis)))
 	}
 	return 0
+}
+
+func blenderYawValue(sample MovementSample, mode string, headingRadians *float64) float64 {
+	if headingRadians != nil {
+		if mode == "raw" {
+			return *headingRadians
+		}
+		return wrapRadians(*headingRadians)
+	}
+	return blenderRotationValue(sample, "z", mode)
+}
+
+func blenderWrappedViewingHeadingDegrees(samples []MovementSample) []*float64 {
+	values := make([]*float64, len(samples))
+	for index, sample := range samples {
+		if sample.ViewingDirectionDegrees == nil {
+			continue
+		}
+		value := *sample.ViewingDirectionDegrees
+		values[index] = &value
+	}
+	return values
+}
+
+func blenderContinuousViewingHeadingDegrees(samples []MovementSample) []*float64 {
+	values := make([]*float64, len(samples))
+	var previous float64
+	var hasPrevious bool
+	for index, sample := range samples {
+		if sample.ViewingDirectionDegrees == nil {
+			continue
+		}
+		current := *sample.ViewingDirectionDegrees
+		if !hasPrevious {
+			value := current
+			values[index] = &value
+			previous = current
+			hasPrevious = true
+			continue
+		}
+		delta := current - previous
+		for delta > 180 {
+			current -= 360
+			delta = current - previous
+		}
+		for delta < -180 {
+			current += 360
+			delta = current - previous
+		}
+		value := current
+		values[index] = &value
+		previous = current
+	}
+	return values
 }
 
 func blenderAxisComponent(vector Vector3, axis string) float32 {

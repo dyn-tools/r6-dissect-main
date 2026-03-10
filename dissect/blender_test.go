@@ -57,7 +57,7 @@ func TestBlenderCameraEulerUsesWrappedDegrees(t *testing.T) {
 		RotationDegrees: &Vector3{X: 15, Y: 25, Z: 35},
 	}
 
-	got := blenderCameraEuler(sample, normalizeBlenderCameraOptions(BlenderCameraOptions{}))
+	got := blenderCameraEuler(sample, normalizeBlenderCameraOptions(BlenderCameraOptions{}), nil)
 	if math.Abs(got.X-degreesToRadians(15)) > 0.0001 {
 		t.Fatalf("expected wrapped pitch from rotationDegrees, got %f", got.X)
 	}
@@ -66,6 +66,51 @@ func TestBlenderCameraEulerUsesWrappedDegrees(t *testing.T) {
 	}
 	if math.Abs(got.Z-degreesToRadians(35)) > 0.0001 {
 		t.Fatalf("expected wrapped yaw from rotationDegrees, got %f", got.Z)
+	}
+}
+
+func TestBlenderCameraEulerPrefersViewingHeadingForYaw(t *testing.T) {
+	viewHeading := 135.0
+	sample := MovementSample{
+		RotationDegrees:         &Vector3{X: 15, Y: 25, Z: 35},
+		ViewingDirectionDegrees: &viewHeading,
+	}
+	headingRadians := degreesToRadians(viewHeading)
+
+	got := blenderCameraEuler(sample, normalizeBlenderCameraOptions(BlenderCameraOptions{}), &headingRadians)
+	if math.Abs(got.X-degreesToRadians(15)) > 0.0001 {
+		t.Fatalf("expected wrapped pitch from rotationDegrees, got %f", got.X)
+	}
+	if math.Abs(got.Y-degreesToRadians(25)) > 0.0001 {
+		t.Fatalf("expected wrapped roll from rotationDegrees, got %f", got.Y)
+	}
+	if math.Abs(got.Z-degreesToRadians(135)) > 0.0001 {
+		t.Fatalf("expected yaw from recovered heading, got %f", got.Z)
+	}
+}
+
+func TestBlenderCameraEulerSupportsLevelCameraOffsets(t *testing.T) {
+	viewHeading := 135.0
+	sample := MovementSample{
+		RotationDegrees:         &Vector3{X: 15, Y: 25, Z: 35},
+		ViewingDirectionDegrees: &viewHeading,
+	}
+	headingRadians := degreesToRadians(viewHeading)
+	options := normalizeBlenderCameraOptions(BlenderCameraOptions{
+		LevelCamera:    true,
+		PitchOffsetDeg: 90,
+		YawOffsetDeg:   -90,
+	})
+
+	got := blenderCameraEuler(sample, options, &headingRadians)
+	if math.Abs(got.X-degreesToRadians(90)) > 0.0001 {
+		t.Fatalf("expected leveled pitch with base offset, got %f", got.X)
+	}
+	if math.Abs(got.Y) > 0.0001 {
+		t.Fatalf("expected roll to be zeroed in level mode, got %f", got.Y)
+	}
+	if math.Abs(got.Z-degreesToRadians(45)) > 0.0001 {
+		t.Fatalf("expected yaw offset to apply to recovered heading, got %f", got.Z)
 	}
 }
 
@@ -163,6 +208,8 @@ func TestBlenderCameraTrackScorePenalizesOriginLikeTrack(t *testing.T) {
 
 func TestRenderBlenderCameraScriptIncludesMetadataAndKeyframes(t *testing.T) {
 	timeValue := 12.5
+	viewHeadingA := 170.0
+	viewHeadingB := -170.0
 	track := MovementTrack{
 		ActorID:         "actor-b",
 		Label:           "P02",
@@ -174,12 +221,14 @@ func TestRenderBlenderCameraScriptIncludesMetadataAndKeyframes(t *testing.T) {
 				Position:        &Vector3{X: 1, Y: 2, Z: 3},
 				Rotation:        &Vector3{X: 0.1, Y: 0.2, Z: 0.3},
 				RotationDegrees: &Vector3{X: 10, Y: 20, Z: 30},
+				ViewingDirectionDegrees: &viewHeadingA,
 			},
 			{
 				Offset:          20,
 				Position:        &Vector3{X: 4, Y: 5, Z: 6},
 				Rotation:        &Vector3{X: 0.4, Y: 0.5, Z: 0.6},
 				RotationDegrees: &Vector3{X: 40, Y: 50, Z: 60},
+				ViewingDirectionDegrees: &viewHeadingB,
 			},
 		},
 	}
@@ -191,13 +240,23 @@ func TestRenderBlenderCameraScriptIncludesMetadataAndKeyframes(t *testing.T) {
 	expectedSnippets := []string{
 		"import bpy",
 		"CAMERA_NAME = \"R6Cam_kds_P02\"",
+		"RIG_NAME = \"R6Rig_kds_P02\"",
+		"BOUNDS_NAME = \"R6Bounds_kds_P02\"",
 		"scene.render.fps = FPS",
 		"camera.rotation_mode = 'XYZ'",
-		"camera.location = (0.5, 1, 1.5)",
-		"camera.keyframe_insert(data_path='location', frame=3)",
-		"keyframe_prop(camera, 'r6_sample_offset', 10, 1)",
-		"keyframe_prop(camera, 'r6_time_seconds', 12.5, 1)",
-		"camera['r6_position_prop'] = POSITION_PROP_ID",
+		"def create_bounds_object(name, bounds_min, bounds_max, collection):",
+		"bounds = create_bounds_object(BOUNDS_NAME, BOUNDS_MIN, BOUNDS_MAX, collection)",
+		"rig = bpy.data.objects.new(RIG_NAME, None)",
+		"camera.parent = rig",
+		"camera.rotation_euler = (0, 0, 0)",
+		"rig.location = (0.5, 1, 1.5)",
+		"rig.rotation_euler = (0.17453292519943295, 0.3490658503988659, 2.9670597283903604)",
+		"rig.keyframe_insert(data_path='location', frame=3)",
+		"keyframe_prop(rig, 'r6_sample_offset', 10, 1)",
+		"keyframe_prop(rig, 'r6_view_heading_deg', 170, 1)",
+		"keyframe_prop(rig, 'r6_view_heading_continuous_deg', 190, 3)",
+		"keyframe_prop(rig, 'r6_time_seconds', 12.5, 1)",
+		"rig['r6_position_prop'] = POSITION_PROP_ID",
 		"scene.frame_end = 3",
 	}
 	for _, snippet := range expectedSnippets {

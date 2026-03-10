@@ -37,6 +37,24 @@ const PADDING = 48;
 const PLAY_INTERVAL_MS = 140;
 const CONVERSION_POLL_MS = 1000;
 const START_TRANSITION = React.startTransition || ((fn) => fn());
+const DEFAULT_3D_VIEW = Object.freeze({
+  yaw: -38,
+  pitch: 28,
+  zoom: 1,
+  pan: { x: 0, y: 0 },
+});
+const VIEWER_3D_PRESETS = Object.freeze({
+  iso: { id: 'iso', label: 'Iso', yaw: -38, pitch: 28, zoom: 1, pan: { x: 0, y: 0 } },
+  front: { id: 'front', label: 'Front', yaw: 0, pitch: 6, zoom: 1.08, pan: { x: 0, y: 0 } },
+  side: { id: 'side', label: 'Side', yaw: 90, pitch: 6, zoom: 1.08, pan: { x: 0, y: 0 } },
+  top: { id: 'top', label: 'Top', yaw: 0, pitch: 82, zoom: 1.12, pan: { x: 0, y: 0 } },
+});
+const VIEWER_3D_LIMITS = Object.freeze({
+  minPitch: -15,
+  maxPitch: 89,
+  minZoom: 0.35,
+  maxZoom: 4,
+});
 const VIEW_PLANES = {
   xy: { id: 'xy', label: 'XY', horizontal: 'x', vertical: 'y', normal: 'z' },
   xz: { id: 'xz', label: 'XZ', horizontal: 'x', vertical: 'z', normal: 'y' },
@@ -51,28 +69,48 @@ const EMPTY_LIBRARY = Object.freeze({
   cameraFiles: [],
   otherJsonFiles: [],
 });
+const VIEWER_COLORS = {
+  panel: 'rgba(34, 40, 49, 0.94)',
+  panelAlt: 'rgba(46, 54, 66, 0.95)',
+  panelStrong: 'rgba(26, 30, 37, 0.98)',
+  overlay: 'rgba(24, 29, 37, 0.94)',
+  border: 'rgba(170, 182, 201, 0.22)',
+  borderSoft: 'rgba(170, 182, 201, 0.12)',
+  grid: 'rgba(173, 185, 204, 0.08)',
+  gridStrong: 'rgba(255, 160, 72, 0.28)',
+  text: '#edf1f7',
+  textMuted: 'rgba(225, 230, 239, 0.68)',
+  accentWarm: '#ff9f45',
+  accentCool: '#66d8c9',
+  accentBlue: '#8aa1c7',
+  accentGold: '#f2c96d',
+  accentDanger: '#ff6d5f',
+  windowHeaderTop: 'rgba(78, 87, 100, 0.98)',
+  windowHeaderBottom: 'rgba(52, 60, 71, 0.98)',
+  workspaceLine: 'rgba(255, 255, 255, 0.035)',
+};
 const theme = createTheme({
   palette: {
-    mode: 'light',
-    primary: { main: '#9f4c28' },
-    secondary: { main: '#355c5f' },
+    mode: 'dark',
+    primary: { main: VIEWER_COLORS.accentWarm },
+    secondary: { main: VIEWER_COLORS.accentCool },
     background: {
-      default: '#efe4d6',
-      paper: 'rgba(255, 250, 244, 0.82)',
+      default: '#171c24',
+      paper: VIEWER_COLORS.panel,
     },
     text: {
-      primary: '#172422',
-      secondary: '#5a6a66',
+      primary: VIEWER_COLORS.text,
+      secondary: VIEWER_COLORS.textMuted,
     },
   },
-  shape: { borderRadius: 18 },
+  shape: { borderRadius: 14 },
   typography: {
-    fontFamily: 'Bahnschrift, Aptos, "Segoe UI Variable Display", sans-serif',
-    h3: { fontWeight: 700 },
-    h4: { fontWeight: 700 },
-    h5: { fontWeight: 700 },
-    h6: { fontWeight: 700 },
-    overline: { letterSpacing: '0.12em', fontWeight: 700 },
+    fontFamily: '"Bahnschrift", "Segoe UI Variable Display", "Aptos", sans-serif',
+    h3: { fontWeight: 800, letterSpacing: '-0.04em' },
+    h4: { fontWeight: 800, letterSpacing: '-0.04em' },
+    h5: { fontWeight: 800, letterSpacing: '-0.03em' },
+    h6: { fontWeight: 800, letterSpacing: '-0.02em' },
+    overline: { letterSpacing: '0.14em', fontWeight: 700 },
   },
   components: {
     MuiCssBaseline: {
@@ -80,10 +118,14 @@ const theme = createTheme({
         body: {
           minHeight: '100vh',
           background: [
-            'radial-gradient(circle at top left, rgba(159, 76, 40, 0.22), transparent 24%)',
-            'radial-gradient(circle at bottom right, rgba(23, 36, 34, 0.16), transparent 28%)',
-            'linear-gradient(135deg, #efe4d6, #d9cab7)',
+            'linear-gradient(0deg, transparent, transparent 31px, rgba(255,255,255,0.025) 32px)',
+            'linear-gradient(90deg, transparent, transparent 31px, rgba(255,255,255,0.02) 32px)',
+            'radial-gradient(circle at 18% 14%, rgba(255, 159, 69, 0.1), transparent 20%)',
+            'radial-gradient(circle at 82% 78%, rgba(102, 216, 201, 0.08), transparent 22%)',
+            'linear-gradient(180deg, #242a33, #1b2028 34%, #151920)',
           ].join(','),
+          backgroundSize: '32px 32px, 32px 32px, auto, auto, auto',
+          color: VIEWER_COLORS.text,
         },
         '#root': {
           minHeight: '100vh',
@@ -93,7 +135,16 @@ const theme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
-          backdropFilter: 'blur(14px)',
+          backdropFilter: 'blur(10px)',
+          backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0))',
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderColor: VIEWER_COLORS.borderSoft,
+          backgroundColor: VIEWER_COLORS.panelAlt,
         },
       },
     },
@@ -127,8 +178,8 @@ const ActorList = React.memo(function ActorList({ tracks, selectedTrackIds, focu
               p: 1.25,
               borderRadius: 2.5,
               border: '1px solid',
-              borderColor: selected ? alpha(theme.palette.primary.main, 0.4) : alpha(theme.palette.text.primary, 0.1),
-              bgcolor: selected ? alpha(theme.palette.primary.main, 0.08) : alpha('#ffffff', 0.45),
+              borderColor: selected ? alpha(theme.palette.primary.main, 0.48) : VIEWER_COLORS.borderSoft,
+              bgcolor: selected ? alpha(theme.palette.primary.main, 0.14) : VIEWER_COLORS.panelAlt,
             }}
           >
             <${Checkbox} size="small" checked=${selected} onChange=${() => onToggleActor(track.actorID)} />
@@ -169,6 +220,11 @@ function App() {
   const [trailLength, setTrailLength] = useState(DEFAULT_TRAIL_LENGTH);
   const [viewPlane, setViewPlane] = useState('xy');
   const [rotationAxis, setRotationAxis] = useState('z');
+  const [view3DYaw, setView3DYaw] = useState(DEFAULT_3D_VIEW.yaw);
+  const [view3DPitch, setView3DPitch] = useState(DEFAULT_3D_VIEW.pitch);
+  const [view3DZoom, setView3DZoom] = useState(DEFAULT_3D_VIEW.zoom);
+  const [view3DPan, setView3DPan] = useState(DEFAULT_3D_VIEW.pan);
+  const [view3DInteraction, setView3DInteraction] = useState('');
   const [denseProbeGroupKey, setDenseProbeGroupKey] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -177,6 +233,12 @@ function App() {
   const [activeConversionKey, setActiveConversionKey] = useState('');
   const [error, setError] = useState('');
   const deferredCursor = useDeferredValue(cursor);
+  const viewer3DDragRef = React.useRef({
+    pointerId: null,
+    mode: '',
+    lastX: 0,
+    lastY: 0,
+  });
 
   useEffect(() => {
     loadLibrary(DEFAULT_LIBRARY_ROOT);
@@ -241,6 +303,10 @@ function App() {
   const scene = useMemo(
     () => buildScene(data, selectedTracks, focusTrack, deferredCursor, trailLength, viewPlane, rotationAxis),
     [data, selectedTracks, focusTrack, deferredCursor, trailLength, viewPlane, rotationAxis],
+  );
+  const scene3D = useMemo(
+    () => buildScene3D(selectedTracks, focusTrack, deferredCursor, trailLength, view3DYaw, view3DPitch, view3DZoom, view3DPan),
+    [selectedTracks, focusTrack, deferredCursor, trailLength, view3DYaw, view3DPitch, view3DZoom, view3DPan],
   );
   const maxCursorValue = Math.max(0, maxTrackLength(tracks) - 1);
   const hasTimedSamples = useMemo(
@@ -469,6 +535,82 @@ function App() {
     });
   }, [selectedTrackIds]);
 
+  const apply3DViewPreset = useCallback((presetID) => {
+    const preset = VIEWER_3D_PRESETS[presetID];
+    if (!preset) {
+      return;
+    }
+    setView3DYaw(preset.yaw);
+    setView3DPitch(preset.pitch);
+    setView3DZoom(preset.zoom);
+    setView3DPan({ ...preset.pan });
+  }, []);
+
+  const reset3DView = useCallback(() => {
+    apply3DViewPreset('iso');
+  }, [apply3DViewPreset]);
+
+  const stop3DInteraction = useCallback((event) => {
+    const dragState = viewer3DDragRef.current;
+    if (event?.currentTarget && dragState.pointerId != null && event.currentTarget.hasPointerCapture?.(dragState.pointerId)) {
+      event.currentTarget.releasePointerCapture(dragState.pointerId);
+    }
+    viewer3DDragRef.current = {
+      pointerId: null,
+      mode: '',
+      lastX: 0,
+      lastY: 0,
+    };
+    setView3DInteraction('');
+  }, []);
+
+  const handle3DPointerDown = useCallback((event) => {
+    const wantsPan = event.button === 2 || (event.button === 0 && event.shiftKey);
+    const wantsOrbit = event.button === 0 || event.button === 1;
+    if (!wantsPan && !wantsOrbit) {
+      return;
+    }
+    event.preventDefault();
+    const mode = wantsPan ? 'pan' : 'orbit';
+    viewer3DDragRef.current = {
+      pointerId: event.pointerId,
+      mode,
+      lastX: event.clientX,
+      lastY: event.clientY,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setView3DInteraction(mode);
+  }, []);
+
+  const handle3DPointerMove = useCallback((event) => {
+    const dragState = viewer3DDragRef.current;
+    if (dragState.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    const deltaX = event.clientX - dragState.lastX;
+    const deltaY = event.clientY - dragState.lastY;
+    dragState.lastX = event.clientX;
+    dragState.lastY = event.clientY;
+    if (dragState.mode === 'orbit') {
+      setView3DYaw((current) => wrapDegrees(current - deltaX * 0.42));
+      setView3DPitch((current) => clamp(current - deltaY * 0.3, VIEWER_3D_LIMITS.minPitch, VIEWER_3D_LIMITS.maxPitch));
+      return;
+    }
+    if (dragState.mode === 'pan') {
+      setView3DPan((current) => ({
+        x: current.x + deltaX,
+        y: current.y + deltaY,
+      }));
+    }
+  }, []);
+
+  const handle3DWheel = useCallback((event) => {
+    event.preventDefault();
+    const nextZoom = Math.exp(-event.deltaY * 0.0012);
+    setView3DZoom((current) => clamp(current * nextZoom, VIEWER_3D_LIMITS.minZoom, VIEWER_3D_LIMITS.maxZoom));
+  }, []);
+
   function selectTopTracks() {
     const topTrackIds = tracks.slice(0, DEFAULT_SELECTION_SIZE).map((track) => track.actorID);
     setSelectedActors(topTrackIds);
@@ -488,152 +630,138 @@ function App() {
       <${Box}
         sx=${{
           minHeight: '100vh',
-          p: { xs: 1.5, md: 2 },
+          p: { xs: 1, md: 1.5 },
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', xl: '360px minmax(0, 1fr)' },
-          gap: 2,
+          gridTemplateColumns: { xs: '1fr', xl: '336px minmax(0, 1fr) 380px' },
+          gap: 1.5,
         }}
       >
-        <${Paper}
-          elevation=${10}
+        <${Box}
           sx=${{
-            p: 2.5,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
+            display: 'grid',
+            gridTemplateRows: { xs: 'auto auto auto', xl: 'minmax(0, 1.35fr) auto minmax(0, 1fr)' },
+            gap: 1.5,
             minWidth: 0,
-            minHeight: { xl: 'calc(100vh - 32px)' },
-            maxHeight: { xl: 'calc(100vh - 32px)' },
-            position: { xl: 'sticky' },
-            top: { xl: 16 },
-            overflow: 'hidden',
-            bgcolor: alpha('#fffaf4', 0.74),
-            border: '1px solid rgba(255,255,255,0.42)',
-            boxShadow: '0 22px 60px rgba(45, 31, 20, 0.18)',
+            minHeight: { xl: 'calc(100vh - 24px)' },
           }}
         >
-          <${Stack} spacing=${0.75}>
-            <${Typography} variant="overline" color="text.secondary">r6-dissect</${Typography}>
-            <${Typography} variant="h4" sx=${{ lineHeight: 0.95, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Movement Viewer
-            </${Typography}>
-            <${Typography} variant="body2" color="text.secondary">
-              Local control room for replay browsing, conversion, and track validation without dropping back to PowerShell.
-            </${Typography}>
-          </${Stack}>
-
-          <${Paper} variant="outlined" sx=${{ p: 1.5, bgcolor: alpha('#fff', 0.56), borderColor: 'rgba(77, 52, 34, 0.16)' }}>
-            <${Stack} spacing=${1.25}>
-              <${Stack} direction="row" alignItems="center" justifyContent="space-between" spacing=${1}>
-                <${Typography} variant="overline" color="text.secondary">Control Room</${Typography}>
-                <${Chip}
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                  label=${`${replayFiles.length} rounds / ${transformFiles.length} transforms`}
-                />
-              </${Stack}>
-              <${TextField}
-                label="Library Root"
-                value=${libraryRoot}
-                onChange=${(event) => setLibraryRoot(event.target.value)}
-                size="small"
-                fullWidth=${true}
-                placeholder="replays"
-              />
-              <${Stack} direction="row" spacing=${1} flexWrap="wrap" useFlexGap=${true}>
-                <${Button} variant="contained" onClick=${() => loadLibrary(libraryRoot)} disabled=${libraryLoading}>
-                  ${libraryLoading ? 'Refreshing...' : 'Refresh Library'}
-                </${Button}>
-                <${Chip} size="small" label=${`${replayFolders.length} folders`} variant="outlined" />
-                <${Chip} size="small" label=${`${probeFiles.length} probes`} variant="outlined" />
-                <${Chip} size="small" label=${`${cameraFiles.length} cameras`} variant="outlined" />
-              </${Stack}>
-
-              <${FormControl} size="small" fullWidth=${true}>
-                <${InputLabel} id="replay-round-label">Replay Round</${InputLabel}>
-                <${Select}
-                  labelId="replay-round-label"
-                  label="Replay Round"
-                  value=${selectedReplayInput}
-                  onChange=${(event) => setSelectedReplayInput(event.target.value)}
-                >
-                  <${MenuItem} value="">
-                    <em>Choose a replay round</em>
-                  </${MenuItem}>
-                  ${replayFiles.map((file) => html`<${MenuItem} key=${file.path} value=${file.path}>${file.path}</${MenuItem}>`)}
-                </${Select}>
-              </${FormControl}>
-
-              <${Stack} direction="row" spacing=${1} flexWrap="wrap" useFlexGap=${true}>
-                <${Button}
-                  variant="contained"
-                  onClick=${() => runConversion('movement', selectedReplayInput)}
-                  disabled=${!selectedReplayInput || convertReplayBusy}
-                >
-                  ${convertReplayBusy ? 'Converting...' : 'Convert Round'}
-                </${Button}>
-                <${Button}
-                  variant="outlined"
-                  onClick=${() => runConversion('movement', selectedReplayInput, { loadOutput: true })}
-                  disabled=${!selectedReplayInput || convertReplayBusy}
-                >
-                  Convert + Load
-                </${Button}>
-                <${Button}
-                  variant="outlined"
-                  onClick=${() => runConversion('movement-probe', selectedReplayInput)}
-                  disabled=${!selectedReplayInput || probeReplayBusy}
-                >
-                  ${probeReplayBusy ? 'Probing...' : 'Probe'}
-                </${Button}>
-                <${Button}
-                  variant="outlined"
-                  onClick=${() => runConversion('blender-camera', selectedReplayInput)}
-                  disabled=${!selectedReplayInput || cameraReplayBusy}
-                >
-                  ${cameraReplayBusy ? 'Exporting...' : 'Camera Script'}
-                </${Button}>
-              </${Stack}>
-
-              <${FormControl} size="small" fullWidth=${true}>
-                <${InputLabel} id="replay-folder-label">Replay Folder</${InputLabel}>
-                <${Select}
-                  labelId="replay-folder-label"
-                  label="Replay Folder"
-                  value=${selectedFolderInput}
-                  onChange=${(event) => setSelectedFolderInput(event.target.value)}
-                >
-                  <${MenuItem} value="">
-                    <em>Choose a replay folder</em>
-                  </${MenuItem}>
-                  ${replayFolders.map((folder) => html`
-                    <${MenuItem} key=${folder.path} value=${folder.path}>
-                      ${folder.path} (${folder.replayCount} rounds)
-                    </${MenuItem}>
-                  `)}
-                </${Select}>
-              </${FormControl}>
-
-              <${Stack} direction="row" spacing=${1} flexWrap="wrap" useFlexGap=${true}>
-                <${Button}
-                  variant="outlined"
-                  onClick=${() => runConversion('movement', selectedFolderInput)}
-                  disabled=${!selectedFolderInput || convertFolderBusy}
-                >
-                  ${convertFolderBusy ? 'Batch Converting...' : 'Batch Convert Folder'}
-                </${Button}>
-              </${Stack}>
-
-              <${Typography} variant="caption" color="text.secondary">
-                Round conversions generate transform JSON sidecars, probe runs generate probe JSON sidecars, and camera export writes a Blender Python sidecar next to the replay unless you override it from the CLI.
+          <${WindowPanel}
+            title="Project"
+            subtitle="Rounds, conversions, and local exports"
+            bodyScroll=${true}
+            panelSx=${{ minHeight: 0 }}
+            bodySx=${{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.5,
+            }}
+          >
+            <${Stack} spacing=${0.6}>
+              <${Typography} variant="overline" color="text.secondary">r6-dissect workstation</${Typography}>
+              <${Typography} variant="h5" sx=${{ textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Movement Viewer
               </${Typography}>
-
-              ${conversionState ? renderConversionStatus(conversionState, loadFromPath) : null}
+              <${Typography} variant="body2" color="text.secondary">
+                Docked replay workspace with conversion tools, validation panes, and a mouse-driven 3D stage.
+              </${Typography}>
             </${Stack}>
-          </${Paper}>
 
-          <${Stack} spacing=${1.5}>
+            <${Stack} direction="row" spacing=${1} flexWrap="wrap" useFlexGap=${true}>
+              <${Chip} size="small" label=${`${replayFiles.length} rounds`} variant="outlined" />
+              <${Chip} size="small" label=${`${transformFiles.length} transforms`} variant="outlined" />
+              <${Chip} size="small" label=${`${probeFiles.length} probes`} variant="outlined" />
+              <${Chip} size="small" label=${`${cameraFiles.length} cameras`} variant="outlined" />
+            </${Stack}>
+
+            <${TextField}
+              label="Library Root"
+              value=${libraryRoot}
+              onChange=${(event) => setLibraryRoot(event.target.value)}
+              size="small"
+              fullWidth=${true}
+              placeholder="replays"
+            />
+
+            <${Stack} direction="row" spacing=${1} flexWrap="wrap" useFlexGap=${true}>
+              <${Button} variant="contained" onClick=${() => loadLibrary(libraryRoot)} disabled=${libraryLoading}>
+                ${libraryLoading ? 'Refreshing...' : 'Refresh Library'}
+              </${Button}>
+              <${Chip} size="small" label=${`${replayFolders.length} folders`} variant="outlined" />
+            </${Stack}>
+
+            <${FormControl} size="small" fullWidth=${true}>
+              <${InputLabel} id="replay-round-label">Replay Round</${InputLabel}>
+              <${Select}
+                labelId="replay-round-label"
+                label="Replay Round"
+                value=${selectedReplayInput}
+                onChange=${(event) => setSelectedReplayInput(event.target.value)}
+              >
+                <${MenuItem} value="">
+                  <em>Choose a replay round</em>
+                </${MenuItem}>
+                ${replayFiles.map((file) => html`<${MenuItem} key=${file.path} value=${file.path}>${file.path}</${MenuItem}>`)}
+              </${Select}>
+            </${FormControl}>
+
+            <${Stack} direction="row" spacing=${1} flexWrap="wrap" useFlexGap=${true}>
+              <${Button}
+                variant="contained"
+                onClick=${() => runConversion('movement', selectedReplayInput)}
+                disabled=${!selectedReplayInput || convertReplayBusy}
+              >
+                ${convertReplayBusy ? 'Converting...' : 'Convert Round'}
+              </${Button}>
+              <${Button}
+                variant="outlined"
+                onClick=${() => runConversion('movement', selectedReplayInput, { loadOutput: true })}
+                disabled=${!selectedReplayInput || convertReplayBusy}
+              >
+                Convert + Load
+              </${Button}>
+              <${Button}
+                variant="outlined"
+                onClick=${() => runConversion('movement-probe', selectedReplayInput)}
+                disabled=${!selectedReplayInput || probeReplayBusy}
+              >
+                ${probeReplayBusy ? 'Probing...' : 'Probe'}
+              </${Button}>
+              <${Button}
+                variant="outlined"
+                onClick=${() => runConversion('blender-camera', selectedReplayInput)}
+                disabled=${!selectedReplayInput || cameraReplayBusy}
+              >
+                ${cameraReplayBusy ? 'Exporting...' : 'Camera Script'}
+              </${Button}>
+            </${Stack}>
+
+            <${FormControl} size="small" fullWidth=${true}>
+              <${InputLabel} id="replay-folder-label">Replay Folder</${InputLabel}>
+              <${Select}
+                labelId="replay-folder-label"
+                label="Replay Folder"
+                value=${selectedFolderInput}
+                onChange=${(event) => setSelectedFolderInput(event.target.value)}
+              >
+                <${MenuItem} value="">
+                  <em>Choose a replay folder</em>
+                </${MenuItem}>
+                ${replayFolders.map((folder) => html`
+                  <${MenuItem} key=${folder.path} value=${folder.path}>
+                    ${folder.path} (${folder.replayCount} rounds)
+                  </${MenuItem}>
+                `)}
+              </${Select}>
+            </${FormControl}>
+
+            <${Button}
+              variant="outlined"
+              onClick=${() => runConversion('movement', selectedFolderInput)}
+              disabled=${!selectedFolderInput || convertFolderBusy}
+            >
+              ${convertFolderBusy ? 'Batch Converting...' : 'Batch Convert Folder'}
+            </${Button}>
+
             <${TextField}
               label="Replay Export Path"
               value=${pathInput}
@@ -642,56 +770,71 @@ function App() {
               placeholder="/replays/your-export.transforms.json"
               fullWidth=${true}
             />
-            <${Stack} direction="row" spacing=${1} flexWrap="wrap">
+
+            <${Stack} direction="row" spacing=${1} flexWrap="wrap" useFlexGap=${true}>
               <${Button} variant="contained" onClick=${() => loadFromPath(pathInput)} disabled=${loading}>
                 ${loading ? 'Loading...' : 'Load Path'}
-              </${Button}>
-              <${Button} variant="outlined" onClick=${selectTopTracks} disabled=${tracks.length === 0}>
-                Top ${DEFAULT_SELECTION_SIZE}
               </${Button}>
               <${Button} variant="outlined" component="label">
                 Open JSON
                 <input hidden type="file" accept=".json,application/json" onChange=${handleFileChange} />
               </${Button}>
             </${Stack}>
-          </${Stack}>
 
-          <${FormControl} size="small" fullWidth=${true}>
-            <${InputLabel} id="known-files-label">Known Transform Exports</${InputLabel}>
-            <${Select}
-              labelId="known-files-label"
-              label="Known Transform Exports"
-              value=${selectedKnownExport}
-              onChange=${(event) => setPathInput(event.target.value)}
-            >
-              <${MenuItem} value="">
-                <em>Choose a local JSON export</em>
-              </${MenuItem}>
-              ${transformFiles.map((file) => html`<${MenuItem} key=${file.path} value=${file.webPath}>${file.path}</${MenuItem}>`)}
-            </${Select}>
-          </${FormControl}>
-
-          <${FormControl} size="small" fullWidth=${true} disabled=${tracks.length === 0}>
-            <${InputLabel} id="focus-actor-label">Focus Actor</${InputLabel}>
-            <${Select}
-              labelId="focus-actor-label"
-              label="Focus Actor"
-              value=${focusTrack?.actorID || ''}
-              onChange=${(event) => chooseFocusActor(event.target.value)}
-            >
-              ${tracks.map((track) => html`
-                <${MenuItem} key=${track.actorID} value=${track.actorID}>
-                  ${displayTrack(track)} · ${track.teamRoleGuess ? `${track.teamRoleGuess} / ` : ``}${shortActor(track.actorID)} · ${track.samples.length} samples
+            <${FormControl} size="small" fullWidth=${true}>
+              <${InputLabel} id="known-files-label">Known Transform Exports</${InputLabel}>
+              <${Select}
+                labelId="known-files-label"
+                label="Known Transform Exports"
+                value=${selectedKnownExport}
+                onChange=${(event) => setPathInput(event.target.value)}
+              >
+                <${MenuItem} value="">
+                  <em>Choose a local JSON export</em>
                 </${MenuItem}>
-              `)}
-            </${Select}>
-          </${FormControl}>
+                ${transformFiles.map((file) => html`<${MenuItem} key=${file.path} value=${file.webPath}>${file.path}</${MenuItem}>`)}
+              </${Select}>
+            </${FormControl}>
 
-          <${Typography} variant="caption" color="text.secondary">
-            Player names are heuristic guesses from death order and kill proximity. Raw actor IDs stay visible below each entry for validation.
-          </${Typography}>
+            <${Typography} variant="caption" color="text.secondary">
+              Round conversions write transform JSON sidecars, probe runs write probe JSON sidecars, and camera export writes a Blender Python sidecar next to the replay unless you override it from the CLI.
+            </${Typography}>
 
-          <${Stack} spacing=${1.25}>
+            ${conversionState ? renderConversionStatus(conversionState, loadFromPath) : null}
+          </${WindowPanel}>
+
+          <${WindowPanel}
+            title="Scene"
+            subtitle="Focus actor and reference frame"
+            bodySx=${{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.5,
+            }}
+          >
+            <${FormControl} size="small" fullWidth=${true} disabled=${tracks.length === 0}>
+              <${InputLabel} id="focus-actor-label">Focus Actor</${InputLabel}>
+              <${Select}
+                labelId="focus-actor-label"
+                label="Focus Actor"
+                value=${focusTrack?.actorID || ''}
+                onChange=${(event) => chooseFocusActor(event.target.value)}
+              >
+                ${tracks.map((track) => html`
+                  <${MenuItem} key=${track.actorID} value=${track.actorID}>
+                    ${displayTrack(track)} · ${track.teamRoleGuess ? `${track.teamRoleGuess} / ` : ``}${shortActor(track.actorID)} · ${track.samples.length} samples
+                  </${MenuItem}>
+                `)}
+              </${Select}>
+            </${FormControl}>
+
+            <${Stack} direction="row" spacing=${1} flexWrap="wrap" useFlexGap=${true}>
+              <${Button} variant="outlined" onClick=${selectTopTracks} disabled=${tracks.length === 0}>
+                Top ${DEFAULT_SELECTION_SIZE}
+              </${Button}>
+              <${Chip} size="small" label=${focusTrack ? displayTrack(focusTrack) : 'No focus actor'} color="primary" variant="outlined" />
+            </${Stack}>
+
             <${Box}>
               <${Typography} variant="overline" color="text.secondary">View Plane</${Typography}>
               <${ToggleButtonGroup}
@@ -708,6 +851,7 @@ function App() {
                 ${Object.values(VIEW_PLANES).map((plane) => html`<${ToggleButton} key=${plane.id} value=${plane.id}>${plane.label}</${ToggleButton}>`)}
               </${ToggleButtonGroup}>
             </${Box}>
+
             <${Box}>
               <${Typography} variant="overline" color="text.secondary">Facing Axis</${Typography}>
               <${ToggleButtonGroup}
@@ -724,75 +868,51 @@ function App() {
                 ${['x', 'y', 'z'].map((axis) => html`<${ToggleButton} key=${axis} value=${axis}>${AXIS_LABELS[axis]}</${ToggleButton}>`)}
               </${ToggleButtonGroup}>
             </${Box}>
-          </${Stack}>
 
-          ${error ? html`<${Alert} severity="error">${error}</${Alert}>` : null}
-          ${!hasTimedSamples && data ? html`<${Alert} severity="info">No reliable replay clock is attached yet. The scrubber still uses sample order, not wall-clock time.</${Alert}>` : null}
-          ${data?.positionPropID || data?.rotationPropID ? html`
-            <${Paper} variant="outlined" sx=${{ p: 1.25, bgcolor: alpha('#fff', 0.56), borderColor: 'rgba(77, 52, 34, 0.16)' }}>
-              <${Stack} spacing=${1}>
-                <${Typography} variant="overline" color="text.secondary">Prop Discovery</${Typography}>
-                <${Typography} variant="body2">
-                  Position ${shortProp(data.positionPropID)} | Rotation ${shortProp(data.rotationPropID)}
-                </${Typography}>
-                ${(data.positionPropCandidates || []).length ? html`
-                  <${Box}>
-                    <${Typography} variant="caption" color="text.secondary">Position candidates</${Typography}>
-                    <${Stack} spacing=${0.5} sx=${{ mt: 0.5 }}>
-                      ${(data.positionPropCandidates || []).slice(0, 4).map((candidate) => html`
-                        <${Typography} key=${candidate.propID} variant="caption" color=${candidate.selected ? 'text.primary' : 'text.secondary'}>
-                          ${candidate.selected ? '>' : '-'} ${shortProp(candidate.propID)} · score ${Math.round(candidate.score)} · abs95 ${Number(candidate.abs95 || 0).toFixed(2)} · strong ${candidate.strongActorCount}
-                        </${Typography}>
-                      `)}
-                    </${Stack}>
-                  </${Box}>
-                ` : null}
-                ${(data.rotationPropCandidates || []).length ? html`
-                  <${Box}>
-                    <${Typography} variant="caption" color="text.secondary">Rotation candidates</${Typography}>
-                    <${Stack} spacing=${0.5} sx=${{ mt: 0.5 }}>
-                      ${(data.rotationPropCandidates || []).slice(0, 4).map((candidate) => html`
-                        <${Typography} key=${candidate.propID} variant="caption" color=${candidate.selected ? 'text.primary' : 'text.secondary'}>
-                          ${candidate.selected ? '>' : '-'} ${shortProp(candidate.propID)} · overlap ${candidate.overlapWithPosition || 0} · score ${Math.round(candidate.score)} · abs95 ${Number(candidate.abs95 || 0).toFixed(2)}
-                        </${Typography}>
-                      `)}
-                    </${Stack}>
-                  </${Box}>
-                ` : null}
-              </${Stack}>
-            </${Paper}>
-          ` : null}
+            <${Typography} variant="caption" color="text.secondary">
+              Player names are heuristic guesses from death order and kill proximity. Raw actor IDs stay visible in the outliner for validation.
+            </${Typography}>
+          </${WindowPanel}>
 
-          <${Divider} flexItem=${true} />
-
-          <${Stack} direction="row" alignItems="center" justifyContent="space-between" spacing=${1}>
-            <${Typography} variant="overline" color="text.secondary">Actors</${Typography}>
-            <${Chip} size="small" label=${selectedTracks.length + ' visible'} color="primary" variant="outlined" />
-          </${Stack}>
-
-          <${ActorList}
-            tracks=${tracks}
-            selectedTrackIds=${selectedTrackIds}
-            focusActorID=${focusTrack?.actorID || ''}
-            onToggleActor=${toggleActor}
-            onChooseFocusActor=${chooseFocusActor}
-          />
-        </${Paper}>
+          <${WindowPanel}
+            title="Outliner"
+            subtitle=${`${selectedTracks.length} visible actor tracks`}
+            panelSx=${{ minHeight: 0 }}
+            bodySx=${{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.25,
+              minHeight: 0,
+            }}
+          >
+            ${error ? html`<${Alert} severity="error">${error}</${Alert}>` : null}
+            ${!hasTimedSamples && data ? html`<${Alert} severity="info">No reliable replay clock is attached yet. The scrubber still uses sample order, not wall-clock time.</${Alert}>` : null}
+            <${ActorList}
+              tracks=${tracks}
+              selectedTrackIds=${selectedTrackIds}
+              focusActorID=${focusTrack?.actorID || ''}
+              onToggleActor=${toggleActor}
+              onChooseFocusActor=${chooseFocusActor}
+            />
+          </${WindowPanel}>
+        </${Box}>
 
         <${Box}
           sx=${{
             minWidth: 0,
             display: 'grid',
             gridTemplateRows: 'auto auto minmax(0, 1fr)',
-            gap: 2,
-            minHeight: { xl: 'calc(100vh - 32px)' },
+            gap: 1.5,
+            minHeight: { xl: 'calc(100vh - 24px)' },
           }}
         >
-          <${Box}
-            sx=${{
+          <${WindowPanel}
+            title="Status"
+            subtitle="Loaded export, follow target, and replay clock"
+            bodySx=${{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xxl: 'repeat(5, minmax(0, 1fr))' },
-              gap: 2,
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xxl: 'repeat(6, minmax(0, 1fr))' },
+              gap: 1.5,
             }}
           >
             ${metricCard('Loaded Export', basename(sourceLabel), data?.header?.map?.name || 'No map yet')}
@@ -801,43 +921,57 @@ function App() {
             ${metricCard('Follow', focusTrack ? displayTrack(focusTrack) : '-', `${scene.config.label} plane / ${AXIS_LABELS[rotationAxis]} heading / ${trailLength} trail`)}
             ${metricCard('Clock', formatClockHeadline(data?.clock), formatClockDetail(data?.clock, currentFocusTime))}
             ${metricCard('Usage', formatUsageHeadline(data?.usage), formatUsageDetail(data?.usage))}
-          </${Box}>
+          </${WindowPanel}>
 
-          <${Paper}
-            elevation=${10}
-            sx=${{
-              p: 2,
-              bgcolor: alpha('#fffaf4', 0.74),
-              border: '1px solid rgba(255,255,255,0.42)',
-              boxShadow: '0 22px 60px rgba(45, 31, 20, 0.18)',
+          <${WindowPanel}
+            title="Timeline & Camera"
+            subtitle="Scrub samples and steer the workspace"
+            bodySx=${{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.75,
             }}
           >
-            <${Stack} spacing=${1.75}>
-              <${Stack} direction="row" spacing=${1} flexWrap="wrap">
-                <${Button} variant=${isPlaying ? 'contained' : 'outlined'} onClick=${() => setIsPlaying((value) => !value)} disabled=${maxCursorValue === 0}>
-                  ${isPlaying ? 'Pause' : 'Play'}
+            <${Stack} direction="row" spacing=${1} flexWrap="wrap" useFlexGap=${true}>
+              <${Button} variant=${isPlaying ? 'contained' : 'outlined'} onClick=${() => setIsPlaying((value) => !value)} disabled=${maxCursorValue === 0}>
+                ${isPlaying ? 'Pause' : 'Play'}
+              </${Button}>
+              <${Button} variant="outlined" onClick=${() => setCursor(0)} disabled=${maxCursorValue === 0}>
+                Reset Cursor
+              </${Button}>
+              <${Button} variant="outlined" onClick=${reset3DView}>
+                Reset 3D View
+              </${Button}>
+              ${Object.values(VIEWER_3D_PRESETS).map((preset) => html`
+                <${Button} key=${preset.id} size="small" variant="text" onClick=${() => apply3DViewPreset(preset.id)}>
+                  ${preset.label}
                 </${Button}>
-                <${Button} variant="outlined" onClick=${() => setCursor(0)} disabled=${maxCursorValue === 0}>
-                  Reset
-                </${Button}>
+              `)}
+            </${Stack}>
+
+            <${Box}>
+              <${Stack} direction="row" justifyContent="space-between" alignItems="center" spacing=${1}>
+                <${Typography} variant="body2" color="text.secondary">Sample Cursor</${Typography}>
+                <${Typography} variant="body2" sx=${{ fontFamily: 'Consolas, "Cascadia Mono", monospace' }}>
+                  ${Math.min(deferredCursor, maxCursorValue)}${currentFocusTime ? ` / ${currentFocusTime}` : ''}
+                </${Typography}>
               </${Stack}>
+              <${Slider}
+                min=${0}
+                max=${maxCursorValue}
+                value=${Math.min(deferredCursor, maxCursorValue)}
+                onChange=${(_, value) => setCursor(Number(value))}
+                sx=${{ mt: 1 }}
+              />
+            </${Box}>
 
-              <${Box}>
-                <${Stack} direction="row" justifyContent="space-between" alignItems="center" spacing=${1}>
-                  <${Typography} variant="body2" color="text.secondary">Sample Cursor</${Typography}>
-                  <${Typography} variant="body2" sx=${{ fontFamily: 'Consolas, "Cascadia Mono", monospace' }}>
-                    ${Math.min(deferredCursor, maxCursorValue)}${currentFocusTime ? ` / ${currentFocusTime}` : ''}
-                  </${Typography}>
-                </${Stack}>
-                <${Slider}
-                  min=${0}
-                  max=${maxCursorValue}
-                  value=${Math.min(deferredCursor, maxCursorValue)}
-                  onChange=${(_, value) => setCursor(Number(value))}
-                  sx=${{ mt: 1 }}
-                />
-              </${Box}>
-
+            <${Box}
+              sx=${{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xxl: 'repeat(4, minmax(0, 1fr))' },
+                gap: 1.5,
+              }}
+            >
               <${Box}>
                 <${Stack} direction="row" justifyContent="space-between" alignItems="center" spacing=${1}>
                   <${Typography} variant="body2" color="text.secondary">Trail Length</${Typography}>
@@ -854,78 +988,191 @@ function App() {
                   sx=${{ mt: 1 }}
                 />
               </${Box}>
-            </${Stack}>
-          </${Paper}>
+
+              <${Box}>
+                <${Stack} direction="row" justifyContent="space-between" alignItems="center" spacing=${1}>
+                  <${Typography} variant="body2" color="text.secondary">3D Azimuth</${Typography}>
+                  <${Typography} variant="body2" sx=${{ fontFamily: 'Consolas, "Cascadia Mono", monospace' }}>
+                    ${view3DYaw}deg
+                  </${Typography}>
+                </${Stack}>
+                <${Slider}
+                  min=${-180}
+                  max=${180}
+                  step=${1}
+                  value=${view3DYaw}
+                  onChange=${(_, value) => setView3DYaw(Number(value))}
+                  sx=${{ mt: 1 }}
+                />
+              </${Box}>
+
+              <${Box}>
+                <${Stack} direction="row" justifyContent="space-between" alignItems="center" spacing=${1}>
+                  <${Typography} variant="body2" color="text.secondary">3D Elevation</${Typography}>
+                  <${Typography} variant="body2" sx=${{ fontFamily: 'Consolas, "Cascadia Mono", monospace' }}>
+                    ${view3DPitch}deg
+                  </${Typography}>
+                </${Stack}>
+                <${Slider}
+                  min=${VIEWER_3D_LIMITS.minPitch}
+                  max=${VIEWER_3D_LIMITS.maxPitch}
+                  step=${1}
+                  value=${view3DPitch}
+                  onChange=${(_, value) => setView3DPitch(Number(value))}
+                  sx=${{ mt: 1 }}
+                />
+              </${Box}>
+
+              <${Box}>
+                <${Stack} direction="row" justifyContent="space-between" alignItems="center" spacing=${1}>
+                  <${Typography} variant="body2" color="text.secondary">3D Zoom</${Typography}>
+                  <${Typography} variant="body2" sx=${{ fontFamily: 'Consolas, "Cascadia Mono", monospace' }}>
+                    ${view3DZoom.toFixed(2)}x
+                  </${Typography}>
+                </${Stack}>
+                <${Slider}
+                  min=${VIEWER_3D_LIMITS.minZoom}
+                  max=${VIEWER_3D_LIMITS.maxZoom}
+                  step=${0.05}
+                  value=${view3DZoom}
+                  onChange=${(_, value) => setView3DZoom(Number(value))}
+                  sx=${{ mt: 1 }}
+                />
+              </${Box}>
+            </${Box}>
+          </${WindowPanel}>
 
           <${Box}
             sx=${{
               minHeight: 0,
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', xxl: 'minmax(0, 1fr) 340px' },
-              gap: 2,
+              gridTemplateColumns: { xs: '1fr', xxl: 'minmax(0, 1fr) minmax(0, 1fr)' },
+              gap: 1.5,
             }}
           >
-            <${Paper}
-              elevation=${10}
-              sx=${{
-                p: 2,
-                minHeight: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                bgcolor: alpha('#fffaf4', 0.74),
-                border: '1px solid rgba(255,255,255,0.42)',
-                boxShadow: '0 22px 60px rgba(45, 31, 20, 0.18)',
-              }}
+            <${WindowPanel}
+              title="Plan View"
+              subtitle="Focus actor stays centered in the selected plane"
+              panelSx=${{ minHeight: 0 }}
+              bodySx=${{ p: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}
             >
               <${Box}
                 sx=${{
                   position: 'relative',
                   flex: 1,
-                  minHeight: { xs: 420, xl: 0 },
-                  borderRadius: 3,
+                  minHeight: { xs: 420, xxl: 0 },
+                  borderRadius: 0,
                   overflow: 'hidden',
-                  border: '1px solid rgba(23,36,34,0.1)',
+                  border: `1px solid ${VIEWER_COLORS.borderSoft}`,
                   backgroundImage: [
-                    'linear-gradient(180deg, rgba(255,255,255,0.62), rgba(227,216,201,0.78))',
-                    'repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(21,34,32,0.05) 28px)',
-                    'repeating-linear-gradient(90deg, transparent, transparent 27px, rgba(21,34,32,0.05) 28px)',
+                    'radial-gradient(circle at top left, rgba(255, 159, 69, 0.12), transparent 24%)',
+                    'linear-gradient(180deg, rgba(29,35,44,0.98), rgba(19,23,29,0.99))',
+                    'repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(255,255,255,0.04) 28px)',
+                    'repeating-linear-gradient(90deg, transparent, transparent 27px, rgba(255,255,255,0.03) 28px)',
                   ].join(','),
                 }}
               >
                 ${renderSvg(scene, rotationAxis)}
-                <${Paper}
-                  variant="outlined"
+                <${Box}
                   sx=${{
                     position: 'absolute',
                     left: 12,
                     bottom: 12,
                     p: 1.2,
                     maxWidth: 380,
-                    bgcolor: alpha('#fffaf4', 0.92),
+                    bgcolor: VIEWER_COLORS.overlay,
+                    border: `1px solid ${VIEWER_COLORS.borderSoft}`,
+                    borderRadius: 1.5,
                   }}
                 >
                   <${Typography} variant="subtitle2">Follow mode is active.</${Typography}>
                   <${Typography} variant="body2" color="text.secondary">
                     The focus actor stays centered using their latest position at the current sample. The grid is locked to the same frame of reference, so the left list can scroll without moving the viewer.
                   </${Typography}>
-                </${Paper}>
+                </${Box}>
               </${Box}>
-            </${Paper}>
+            </${WindowPanel}>
 
-            <${Paper}
-              elevation=${10}
-              sx=${{
-                p: 2,
-                minHeight: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 2,
-                overflow: 'auto',
-                bgcolor: alpha('#fffaf4', 0.74),
-                border: '1px solid rgba(255,255,255,0.42)',
-                boxShadow: '0 22px 60px rgba(45, 31, 20, 0.18)',
-              }}
+            <${WindowPanel}
+              title="3D View"
+              subtitle="Left drag orbit, Shift/right drag pan, wheel zoom"
+              panelSx=${{ minHeight: 0 }}
+              bodySx=${{ p: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 1 }}
             >
+              <${Stack} direction="row" spacing=${0.75} flexWrap=${true} useFlexGap=${true}>
+                ${Object.values(VIEWER_3D_PRESETS).map((preset) => html`
+                  <${Button} key=${preset.id} size="small" variant="text" onClick=${() => apply3DViewPreset(preset.id)}>
+                    ${preset.label}
+                  </${Button}>
+                `)}
+                <${Button} size="small" variant="outlined" onClick=${reset3DView}>Reset</${Button}>
+              </${Stack}>
+              <${Box}
+                onPointerDown=${handle3DPointerDown}
+                onPointerMove=${handle3DPointerMove}
+                onPointerUp=${stop3DInteraction}
+                onPointerCancel=${stop3DInteraction}
+                onLostPointerCapture=${stop3DInteraction}
+                onWheel=${handle3DWheel}
+                onContextMenu=${(event) => event.preventDefault()}
+                onDoubleClick=${reset3DView}
+                sx=${{
+                  position: 'relative',
+                  flex: 1,
+                  minHeight: { xs: 420, xxl: 0 },
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  border: `1px solid ${VIEWER_COLORS.borderSoft}`,
+                  cursor: view3DInteraction === 'pan' || view3DInteraction === 'orbit' ? 'grabbing' : 'crosshair',
+                  userSelect: 'none',
+                  touchAction: 'none',
+                  backgroundImage: [
+                    'radial-gradient(circle at 18% 14%, rgba(255, 159, 69, 0.12), transparent 24%)',
+                    'radial-gradient(circle at 82% 78%, rgba(102, 216, 201, 0.1), transparent 26%)',
+                    'linear-gradient(180deg, rgba(27,32,40,0.98), rgba(16,20,25,0.99))',
+                  ].join(','),
+                }}
+              >
+                ${render3DSvg(scene3D)}
+                <${Box}
+                  sx=${{
+                    position: 'absolute',
+                    right: 12,
+                    top: 12,
+                    p: 1.2,
+                    maxWidth: 320,
+                    bgcolor: VIEWER_COLORS.overlay,
+                    border: `1px solid ${VIEWER_COLORS.borderSoft}`,
+                    borderRadius: 1.5,
+                  }}
+                >
+                  <${Typography} variant="subtitle2">Viewport Navigation</${Typography}>
+                  <${Typography} variant="body2" color="text.secondary">
+                    Left drag orbits, Shift plus left drag or right drag pans, the wheel zooms, and double-click resets the view.
+                  </${Typography}>
+                  <${Typography} variant="caption" color="text.secondary" sx=${{ mt: 1, display: 'block' }}>
+                    ${view3DInteraction ? `Interaction: ${view3DInteraction}` : `Pan ${view3DPan.x.toFixed(0)}, ${view3DPan.y.toFixed(0)}`}
+                  </${Typography}>
+                </${Box}>
+              </${Box}>
+            </${WindowPanel}>
+          </${Box}>
+        </${Box}>
+
+        <${WindowPanel}
+          title="Inspector"
+          subtitle="Round metadata, direction recovery, and sample probes"
+          bodyScroll=${true}
+          panelSx=${{
+            minHeight: { xl: 'calc(100vh - 24px)' },
+            maxHeight: { xl: 'calc(100vh - 24px)' },
+          }}
+          bodySx=${{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+          }}
+        >
               ${detailCard('Round Header', [
                 ['Map', data?.header?.map?.name || '-'],
                 ['Site', data?.header?.site || '-'],
@@ -940,6 +1187,43 @@ function App() {
                 ['Focus world pos', scene.focusPosition ? formatVector(scene.focusPosition) : 'No position yet'],
                 ['Grid step', scene.gridStep.toFixed(3)],
               ])}
+
+              ${data?.positionPropID || data?.rotationPropID ? html`
+                <${Card} variant="outlined" sx=${{ bgcolor: VIEWER_COLORS.panelAlt }}>
+                  <${CardContent}>
+                    <${Stack} spacing=${1}>
+                      <${Typography} variant="h6">Prop Discovery</${Typography}>
+                      <${Typography} variant="body2">
+                        Position ${shortProp(data.positionPropID)} | Rotation ${shortProp(data.rotationPropID)}
+                      </${Typography}>
+                      ${(data.positionPropCandidates || []).length ? html`
+                        <${Box}>
+                          <${Typography} variant="caption" color="text.secondary">Position candidates</${Typography}>
+                          <${Stack} spacing=${0.5} sx=${{ mt: 0.5 }}>
+                            ${(data.positionPropCandidates || []).slice(0, 4).map((candidate) => html`
+                              <${Typography} key=${candidate.propID} variant="caption" color=${candidate.selected ? 'text.primary' : 'text.secondary'}>
+                                ${candidate.selected ? '>' : '-'} ${shortProp(candidate.propID)} · score ${Math.round(candidate.score)} · abs95 ${Number(candidate.abs95 || 0).toFixed(2)} · strong ${candidate.strongActorCount}
+                              </${Typography}>
+                            `)}
+                          </${Stack}>
+                        </${Box}>
+                      ` : null}
+                      ${(data.rotationPropCandidates || []).length ? html`
+                        <${Box}>
+                          <${Typography} variant="caption" color="text.secondary">Rotation candidates</${Typography}>
+                          <${Stack} spacing=${0.5} sx=${{ mt: 0.5 }}>
+                            ${(data.rotationPropCandidates || []).slice(0, 4).map((candidate) => html`
+                              <${Typography} key=${candidate.propID} variant="caption" color=${candidate.selected ? 'text.primary' : 'text.secondary'}>
+                                ${candidate.selected ? '>' : '-'} ${shortProp(candidate.propID)} · overlap ${candidate.overlapWithPosition || 0} · score ${Math.round(candidate.score)} · abs95 ${Number(candidate.abs95 || 0).toFixed(2)}
+                              </${Typography}>
+                            `)}
+                          </${Stack}>
+                        </${Box}>
+                      ` : null}
+                    </${Stack}>
+                  </${CardContent}>
+                </${Card}>
+              ` : null}
 
               ${data?.usage ? detailCard('Replay Usage', [
                 ['Replay usage', `${formatPercent(data.usage.replayUsagePercent)} (${data.usage.exportedSamples}/${data.usage.totalCandidatePackets})`],
@@ -961,14 +1245,14 @@ function App() {
                 ['Mapping', data.clock.mapping || '-'],
               ]) : null}
 
-              <${Card} variant="outlined" sx=${{ bgcolor: alpha('#ffffff', 0.5) }}>
+              <${Card} variant="outlined" sx=${{ bgcolor: VIEWER_COLORS.panelAlt }}>
                 <${CardContent}>
                   <${Typography} variant="h6" gutterBottom=${true}>Raw Rotation Packets</${Typography}>
                   ${renderRotationGraph(focusTrack, focusRotationGraph, deferredCursor, rotationAxis)}
                 </${CardContent}>
               </${Card}>
 
-              <${Card} variant="outlined" sx=${{ bgcolor: alpha('#ffffff', 0.5) }}>
+              <${Card} variant="outlined" sx=${{ bgcolor: VIEWER_COLORS.panelAlt }}>
                 <${CardContent}>
                   <${Stack} spacing=${1.5}>
                     <${Typography} variant="h6">Recovered View Heading</${Typography}>
@@ -977,7 +1261,7 @@ function App() {
                     ${(focusValidation || focusDirectionSearch) ? html`
                       <${Stack} spacing=${1.25}>
                         ${focusValidation ? html`
-                          <${Paper} variant="outlined" sx=${{ p: 1.25, bgcolor: alpha('#fff', 0.56) }}>
+                          <${Paper} variant="outlined" sx=${{ p: 1.25, bgcolor: VIEWER_COLORS.panelStrong }}>
                             <${Typography} variant="subtitle2" gutterBottom=${true}>Decoded Export</${Typography}>
                             ${detailRows([
                               ['Source', formatValidationSource(focusValidation)],
@@ -992,7 +1276,7 @@ function App() {
                           </${Paper}>
                         ` : null}
                         ${focusDirectionSearch ? html`
-                          <${Paper} variant="outlined" sx=${{ p: 1.25, bgcolor: alpha('#fff', 0.56) }}>
+                          <${Paper} variant="outlined" sx=${{ p: 1.25, bgcolor: VIEWER_COLORS.panelStrong }}>
                             <${Typography} variant="subtitle2" gutterBottom=${true}>Raw Search Anchors</${Typography}>
                             <${Stack} spacing=${1.25}>
                               ${focusDirectionSearch.bestSameActorCandidate ? html`
@@ -1020,7 +1304,7 @@ function App() {
                 </${CardContent}>
               </${Card}>
 
-              <${Card} variant="outlined" sx=${{ bgcolor: alpha('#ffffff', 0.5) }}>
+              <${Card} variant="outlined" sx=${{ bgcolor: VIEWER_COLORS.panelAlt }}>
                 <${CardContent}>
                   <${Stack} spacing=${1.5}>
                     <${Typography} variant="h6">Dense Prop Lanes</${Typography}>
@@ -1035,11 +1319,11 @@ function App() {
                 </${CardContent}>
               </${Card}>
 
-              <${Card} variant="outlined" sx=${{ bgcolor: alpha('#ffffff', 0.5) }}>
+              <${Card} variant="outlined" sx=${{ bgcolor: VIEWER_COLORS.panelAlt }}>
                 <${CardContent}>
                   <${Typography} variant="h6" gutterBottom=${true}>Current Samples</${Typography}>
                   ${currentSummaries.length === 0 ? html`<${Alert} severity="info">Select at least one actor with position data.</${Alert}>` : currentSummaries.slice(0, 8).map((summary, index) => html`
-                    <${Box} key=${summary.actorID} sx=${{ pt: index === 0 ? 0 : 1.25, mt: index === 0 ? 0 : 1.25, borderTop: index === 0 ? 'none' : '1px solid rgba(23,36,34,0.08)' }}>
+                    <${Box} key=${summary.actorID} sx=${{ pt: index === 0 ? 0 : 1.25, mt: index === 0 ? 0 : 1.25, borderTop: index === 0 ? 'none' : `1px solid ${VIEWER_COLORS.borderSoft}` }}>
                       <${Typography} variant="subtitle2" sx=${{ color: colorForActor(summary.actorID), mb: 1 }}>
                         ${displayTrack(summary)}
                       </${Typography}>
@@ -1059,11 +1343,11 @@ function App() {
                 </${CardContent}>
               </${Card}>
 
-              <${Card} variant="outlined" sx=${{ bgcolor: alpha('#ffffff', 0.5) }}>
+              <${Card} variant="outlined" sx=${{ bgcolor: VIEWER_COLORS.panelAlt }}>
                 <${CardContent}>
                   <${Typography} variant="h6" gutterBottom=${true}>Players</${Typography}>
                   <${Alert} severity="info" sx=${{ mb: 2 }}>
-                    Round roster comes from the replay header. The focus list on the left shows heuristic actor-to-player guesses, and each entry still includes its raw actor ID for validation.
+                    Round roster comes from the replay header. The outliner shows heuristic actor-to-player guesses, and each entry still includes its raw actor ID for validation.
                   </${Alert}>
                   <${Stack} spacing=${1}>
                     ${players.map((player) => html`
@@ -1075,11 +1359,70 @@ function App() {
                   </${Stack}>
                 </${CardContent}>
               </${Card}>
-            </${Paper}>
-          </${Box}>
-        </${Box}>
+        </${WindowPanel}>
       </${Box}>
     </${ThemeProvider}>
+  `;
+}
+
+function WindowPanel({ title, subtitle, children, panelSx = {}, bodySx = {}, bodyScroll = false }) {
+  return html`
+    <${Paper}
+      elevation=${10}
+      sx=${{
+        minHeight: 0,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        bgcolor: VIEWER_COLORS.panel,
+        border: `1px solid ${VIEWER_COLORS.border}`,
+        boxShadow: '0 24px 70px rgba(0, 0, 0, 0.34)',
+        ...panelSx,
+      }}
+    >
+      <${Box}
+        sx=${{
+          px: 1.5,
+          py: 1.1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1.25,
+          borderBottom: `1px solid ${VIEWER_COLORS.borderSoft}`,
+          background: `linear-gradient(180deg, ${VIEWER_COLORS.windowHeaderTop}, ${VIEWER_COLORS.windowHeaderBottom})`,
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+        }}
+      >
+        <${Stack} direction="row" spacing=${1.1} alignItems="center" sx=${{ minWidth: 0 }}>
+          <${Stack} direction="row" spacing=${0.6}>
+            <${Box} sx=${{ width: 9, height: 9, borderRadius: '999px', bgcolor: VIEWER_COLORS.accentDanger }} />
+            <${Box} sx=${{ width: 9, height: 9, borderRadius: '999px', bgcolor: VIEWER_COLORS.accentGold }} />
+            <${Box} sx=${{ width: 9, height: 9, borderRadius: '999px', bgcolor: VIEWER_COLORS.accentCool }} />
+          </${Stack}>
+          <${Box} sx=${{ minWidth: 0 }}>
+            <${Typography} variant="overline" sx=${{ display: 'block', lineHeight: 1.1 }}>
+              ${title}
+            </${Typography}>
+            ${subtitle ? html`
+              <${Typography} variant="caption" color="text.secondary" sx=${{ display: 'block', mt: 0.35 }}>
+                ${subtitle}
+              </${Typography}>
+            ` : null}
+          </${Box}>
+        </${Stack}>
+      </${Box}>
+      <${Box}
+        sx=${{
+          p: 1.5,
+          minHeight: 0,
+          overflowY: bodyScroll ? 'auto' : 'visible',
+          overflowX: 'hidden',
+          ...bodySx,
+        }}
+      >
+        ${children}
+      </${Box}>
+    </${Paper}>
   `;
 }
 
@@ -1087,14 +1430,14 @@ function metricCard(label, value, detail) {
   return html`
     <${Card}
       sx=${{
-        bgcolor: alpha('#fffaf4', 0.74),
-        border: '1px solid rgba(255,255,255,0.42)',
-        boxShadow: '0 22px 60px rgba(45, 31, 20, 0.18)',
+        bgcolor: VIEWER_COLORS.panelAlt,
+        border: `1px solid ${VIEWER_COLORS.border}`,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
       }}
     >
       <${CardContent}>
         <${Typography} variant="overline" color="text.secondary">${label}</${Typography}>
-        <${Typography} variant="h4" sx=${{ mt: 0.5 }}>${value}</${Typography}>
+        <${Typography} variant="h5" sx=${{ mt: 0.5 }}>${value}</${Typography}>
         <${Typography} variant="body2" color="text.secondary" sx=${{ mt: 1 }}>${detail}</${Typography}>
       </${CardContent}>
     </${Card}>
@@ -1103,7 +1446,7 @@ function metricCard(label, value, detail) {
 
 function detailCard(title, items) {
   return html`
-    <${Card} variant="outlined" sx=${{ bgcolor: alpha('#ffffff', 0.5) }}>
+    <${Card} variant="outlined" sx=${{ bgcolor: VIEWER_COLORS.panelAlt }}>
       <${CardContent}>
         <${Typography} variant="h6" gutterBottom=${true}>${title}</${Typography}>
         ${detailRows(items)}
@@ -1157,9 +1500,9 @@ function renderRotationGraph(track, graph, cursor, rotationAxis) {
   const polyline = (axis) => graph.points.map((point) => `${xAt(point.sampleIndex)},${yAt(point[axis])}`).join(' ');
   const cursorX = xAt(clampedCursor);
   const legend = [
-    { axis: 'x', color: '#c84c2a' },
-    { axis: 'y', color: '#2f7f6b' },
-    { axis: 'z', color: '#325fc2' },
+    { axis: 'x', color: VIEWER_COLORS.accentWarm },
+    { axis: 'y', color: VIEWER_COLORS.accentCool },
+    { axis: 'z', color: VIEWER_COLORS.accentBlue },
   ];
 
   return html`
@@ -1188,19 +1531,19 @@ function renderRotationGraph(track, graph, cursor, rotationAxis) {
         `)}
       </${Stack}>
       <svg viewBox=${`0 0 ${width} ${height}`} style=${{ width: '100%', height: '220px', display: 'block' }}>
-        <rect x="0" y="0" width=${width} height=${height} fill="rgba(255,250,244,0.72)"></rect>
+        <rect x="0" y="0" width=${width} height=${height} fill=${VIEWER_COLORS.panelStrong}></rect>
         ${[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
           const value = graph.maxValue - (graph.maxValue - graph.minValue) * ratio;
           const y = padTop + plotHeight * ratio;
           return html`
             <g key=${`grid-${index}`}>
-              <line x1=${padLeft} x2=${width - padRight} y1=${y} y2=${y} stroke="rgba(23,36,34,0.1)" strokeWidth="1"></line>
-              <text x="10" y=${y + 4} fill="rgba(23,36,34,0.55)" font-size="11">${value.toFixed(1)}deg</text>
+              <line x1=${padLeft} x2=${width - padRight} y1=${y} y2=${y} stroke=${VIEWER_COLORS.grid} strokeWidth="1"></line>
+              <text x="10" y=${y + 4} fill=${VIEWER_COLORS.textMuted} font-size="11">${value.toFixed(1)}deg</text>
             </g>
           `;
         })}
-        <line x1=${padLeft} x2=${padLeft} y1=${padTop} y2=${height - padBottom} stroke="rgba(23,36,34,0.22)" strokeWidth="1.5"></line>
-        <line x1=${padLeft} x2=${width - padRight} y1=${height - padBottom} y2=${height - padBottom} stroke="rgba(23,36,34,0.22)" strokeWidth="1.5"></line>
+        <line x1=${padLeft} x2=${padLeft} y1=${padTop} y2=${height - padBottom} stroke=${VIEWER_COLORS.gridStrong} strokeWidth="1.5"></line>
+        <line x1=${padLeft} x2=${width - padRight} y1=${height - padBottom} y2=${height - padBottom} stroke=${VIEWER_COLORS.gridStrong} strokeWidth="1.5"></line>
         ${legend.map((entry) => html`
           <polyline
             key=${entry.axis}
@@ -1211,7 +1554,7 @@ function renderRotationGraph(track, graph, cursor, rotationAxis) {
             points=${polyline(entry.axis)}
           ></polyline>
         `)}
-        <line x1=${cursorX} x2=${cursorX} y1=${padTop} y2=${height - padBottom} stroke="rgba(23,36,34,0.35)" strokeDasharray="5 4" strokeWidth="1.5"></line>
+        <line x1=${cursorX} x2=${cursorX} y1=${padTop} y2=${height - padBottom} stroke="rgba(237,244,255,0.28)" strokeDasharray="5 4" strokeWidth="1.5"></line>
         ${legend.map((entry) => html`
           <circle
             key=${`${entry.axis}-cursor`}
@@ -1221,11 +1564,11 @@ function renderRotationGraph(track, graph, cursor, rotationAxis) {
             fill=${entry.color}
           ></circle>
         `)}
-        <text x=${width - padRight - 160} y="16" fill="rgba(23,36,34,0.65)" font-size="12">sample ${clampedCursor}</text>
-        <text x=${width - padRight - 160} y="32" fill="rgba(23,36,34,0.65)" font-size="12">rot sample ${cursorPoint.sampleIndex}</text>
-        <text x=${width - padRight - 160} y="48" fill="rgba(23,36,34,0.65)" font-size="12">range ${graph.minValue.toFixed(1)}..${graph.maxValue.toFixed(1)}deg</text>
+        <text x=${width - padRight - 160} y="16" fill=${VIEWER_COLORS.textMuted} font-size="12">sample ${clampedCursor}</text>
+        <text x=${width - padRight - 160} y="32" fill=${VIEWER_COLORS.textMuted} font-size="12">rot sample ${cursorPoint.sampleIndex}</text>
+        <text x=${width - padRight - 160} y="48" fill=${VIEWER_COLORS.textMuted} font-size="12">range ${graph.minValue.toFixed(1)}..${graph.maxValue.toFixed(1)}deg</text>
         ${cursorPoint.time ? html`
-          <text x=${width - padRight - 160} y="64" fill="rgba(23,36,34,0.65)" font-size="12">time ${cursorPoint.time}</text>
+          <text x=${width - padRight - 160} y="64" fill=${VIEWER_COLORS.textMuted} font-size="12">time ${cursorPoint.time}</text>
         ` : null}
       </svg>
       <${Typography} variant="caption" color="text.secondary">
@@ -1309,9 +1652,9 @@ function renderDirectionGraph(track, graph, cursor) {
   const polyline = (field) => graph.points.map((point) => `${xAt(point.sampleIndex)},${yAt(point[field])}`).join(' ');
   const cursorX = xAt(clampedCursor);
   const legend = [
-    { key: 'movementDegrees', color: '#c84c2a', label: `Move ${cursorPoint.movementDegrees.toFixed(1)}deg` },
-    { key: 'viewingDegrees', color: '#2f7f6b', label: `View ${cursorPoint.viewingDegrees.toFixed(1)}deg` },
-    { key: 'deltaDegrees', color: '#325fc2', label: `Delta ${Math.abs(cursorPoint.deltaDegrees).toFixed(1)}deg` },
+    { key: 'movementDegrees', color: VIEWER_COLORS.accentWarm, label: `Move ${cursorPoint.movementDegrees.toFixed(1)}deg` },
+    { key: 'viewingDegrees', color: VIEWER_COLORS.accentCool, label: `View ${cursorPoint.viewingDegrees.toFixed(1)}deg` },
+    { key: 'deltaDegrees', color: VIEWER_COLORS.accentBlue, label: `Delta ${Math.abs(cursorPoint.deltaDegrees).toFixed(1)}deg` },
   ];
 
   return html`
@@ -1347,27 +1690,27 @@ function renderDirectionGraph(track, graph, cursor) {
         ` : null}
       </${Stack}>
       <svg viewBox=${`0 0 ${width} ${height}`} style=${{ width: '100%', height: '240px', display: 'block' }}>
-        <rect x="0" y="0" width=${width} height=${height} fill="rgba(255,250,244,0.72)"></rect>
+        <rect x="0" y="0" width=${width} height=${height} fill=${VIEWER_COLORS.panelStrong}></rect>
         ${[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
           const value = graph.maxValue - (graph.maxValue - graph.minValue) * ratio;
           const y = padTop + plotHeight * ratio;
           return html`
             <g key=${`dir-grid-${index}`}>
-              <line x1=${padLeft} x2=${width - padRight} y1=${y} y2=${y} stroke="rgba(23,36,34,0.1)" strokeWidth="1"></line>
-              <text x="10" y=${y + 4} fill="rgba(23,36,34,0.55)" font-size="11">${value.toFixed(1)}deg</text>
+              <line x1=${padLeft} x2=${width - padRight} y1=${y} y2=${y} stroke=${VIEWER_COLORS.grid} strokeWidth="1"></line>
+              <text x="10" y=${y + 4} fill=${VIEWER_COLORS.textMuted} font-size="11">${value.toFixed(1)}deg</text>
             </g>
           `;
         })}
-        <line x1=${padLeft} x2=${padLeft} y1=${padTop} y2=${height - padBottom} stroke="rgba(23,36,34,0.22)" strokeWidth="1.5"></line>
-        <line x1=${padLeft} x2=${width - padRight} y1=${height - padBottom} y2=${height - padBottom} stroke="rgba(23,36,34,0.22)" strokeWidth="1.5"></line>
-        <polyline fill="none" stroke="#c84c2a" strokeWidth="2.8" points=${polyline('movementDegrees')}></polyline>
-        <polyline fill="none" stroke="#2f7f6b" strokeWidth="2.8" strokeOpacity="0.88" points=${polyline('viewingDegrees')}></polyline>
-        <line x1=${cursorX} x2=${cursorX} y1=${padTop} y2=${height - padBottom} stroke="rgba(23,36,34,0.35)" strokeDasharray="5 4" strokeWidth="1.5"></line>
-        <circle cx=${xAt(cursorPoint.sampleIndex)} cy=${yAt(cursorPoint.movementDegrees)} r="4.5" fill="#c84c2a"></circle>
-        <circle cx=${xAt(cursorPoint.sampleIndex)} cy=${yAt(cursorPoint.viewingDegrees)} r="4.5" fill="#2f7f6b"></circle>
-        <text x=${width - padRight - 180} y="16" fill="rgba(23,36,34,0.65)" font-size="12">sample ${clampedCursor}</text>
-        <text x=${width - padRight - 180} y="32" fill="rgba(23,36,34,0.65)" font-size="12">step sample ${cursorPoint.sampleIndex}</text>
-        <text x=${width - padRight - 180} y="48" fill="rgba(23,36,34,0.65)" font-size="12">range ${graph.minValue.toFixed(1)}..${graph.maxValue.toFixed(1)}deg</text>
+        <line x1=${padLeft} x2=${padLeft} y1=${padTop} y2=${height - padBottom} stroke=${VIEWER_COLORS.gridStrong} strokeWidth="1.5"></line>
+        <line x1=${padLeft} x2=${width - padRight} y1=${height - padBottom} y2=${height - padBottom} stroke=${VIEWER_COLORS.gridStrong} strokeWidth="1.5"></line>
+        <polyline fill="none" stroke=${VIEWER_COLORS.accentWarm} strokeWidth="2.8" points=${polyline('movementDegrees')}></polyline>
+        <polyline fill="none" stroke=${VIEWER_COLORS.accentCool} strokeWidth="2.8" strokeOpacity="0.88" points=${polyline('viewingDegrees')}></polyline>
+        <line x1=${cursorX} x2=${cursorX} y1=${padTop} y2=${height - padBottom} stroke="rgba(237,244,255,0.28)" strokeDasharray="5 4" strokeWidth="1.5"></line>
+        <circle cx=${xAt(cursorPoint.sampleIndex)} cy=${yAt(cursorPoint.movementDegrees)} r="4.5" fill=${VIEWER_COLORS.accentWarm}></circle>
+        <circle cx=${xAt(cursorPoint.sampleIndex)} cy=${yAt(cursorPoint.viewingDegrees)} r="4.5" fill=${VIEWER_COLORS.accentCool}></circle>
+        <text x=${width - padRight - 180} y="16" fill=${VIEWER_COLORS.textMuted} font-size="12">sample ${clampedCursor}</text>
+        <text x=${width - padRight - 180} y="32" fill=${VIEWER_COLORS.textMuted} font-size="12">step sample ${cursorPoint.sampleIndex}</text>
+        <text x=${width - padRight - 180} y="48" fill=${VIEWER_COLORS.textMuted} font-size="12">range ${graph.minValue.toFixed(1)}..${graph.maxValue.toFixed(1)}deg</text>
       </svg>
       <${Typography} variant="caption" color="text.secondary">
         Orange is XY movement heading from position deltas. Green is the decoded viewing heading derived with the export's own best sanity-check model${graph.summary.sourceLabel ? ` (${graph.summary.sourceLabel})` : ''}. Both curves are unwrapped so long turns stay continuous.
@@ -1419,11 +1762,11 @@ function renderDensePropProbe(probe, groups, selectedGroup, selectedKey, onSelec
           ['Actors', selectedGroup.actorCount],
           ['Best candidate', selectedGroup.bestCandidate ? `${formatMetric(selectedGroup.bestCandidate.meanCosineAgreement)} cos / ${formatDegrees(selectedGroup.bestCandidate.meanErrorDegrees)}` : 'none'],
         ])}
-        <${Paper} variant="outlined" sx=${{ p: 1.25, bgcolor: alpha('#fff', 0.56) }}>
+        <${Paper} variant="outlined" sx=${{ p: 1.25, bgcolor: VIEWER_COLORS.panelStrong }}>
           <${Typography} variant="subtitle2" gutterBottom=${true}>Lane Actors</${Typography}>
           <${Stack} spacing=${1}>
             ${(selectedGroup.actors || []).map((actor) => html`
-              <${Box} key=${`${selectedGroup.source}-${selectedGroup.vectorOffset}-${actor.actorID}`} sx=${{ pb: 1, borderBottom: '1px solid rgba(23,36,34,0.08)' }}>
+              <${Box} key=${`${selectedGroup.source}-${selectedGroup.vectorOffset}-${actor.actorID}`} sx=${{ pb: 1, borderBottom: `1px solid ${VIEWER_COLORS.borderSoft}` }}>
                 ${detailRows([
                   ['Actor', shortActor(actor.actorID)],
                   ['Samples', actor.sampleCount],
@@ -1437,11 +1780,11 @@ function renderDensePropProbe(probe, groups, selectedGroup, selectedKey, onSelec
         </${Paper}>
       ` : null}
       ${(probe.actorOrder || []).length ? html`
-        <${Paper} variant="outlined" sx=${{ p: 1.25, bgcolor: alpha('#fff', 0.56) }}>
+        <${Paper} variant="outlined" sx=${{ p: 1.25, bgcolor: VIEWER_COLORS.panelStrong }}>
           <${Typography} variant="subtitle2" gutterBottom=${true}>Prop Actor Envelopes</${Typography}>
           <${Stack} spacing=${1}>
             ${(probe.actorOrder || []).slice(0, 10).map((actor) => html`
-              <${Box} key=${`env-${actor.actorID}-${actor.firstOffset}-${actor.lastOffset}`} sx=${{ pb: 1, borderBottom: '1px solid rgba(23,36,34,0.08)' }}>
+              <${Box} key=${`env-${actor.actorID}-${actor.firstOffset}-${actor.lastOffset}`} sx=${{ pb: 1, borderBottom: `1px solid ${VIEWER_COLORS.borderSoft}` }}>
                 ${detailRows([
                   ['Actor', shortActor(actor.actorID)],
                   ['Samples', actor.sampleCount],
@@ -1817,7 +2160,7 @@ function renderSvg(scene, rotationAxis) {
         ${currentPoint ? html`
           ${isFocus ? html`<circle cx=${currentPoint.x} cy=${currentPoint.y} r="14" fill="none" stroke=${color} strokeWidth="3" strokeOpacity="0.35"></circle>` : null}
           <circle cx=${currentPoint.x} cy=${currentPoint.y} r=${isFocus ? '8' : '6'} fill=${color}></circle>
-          <text x=${currentPoint.x + 10} y=${currentPoint.y - 10} fill="#172422" font-size="14" font-weight="700">
+          <text x=${currentPoint.x + 10} y=${currentPoint.y - 10} fill=${VIEWER_COLORS.text} font-size="14" font-weight="700">
             ${displayTrack(entry)}
           </text>
         ` : null}
@@ -1873,7 +2216,7 @@ function gridLines(scene, project) {
         x2=${x}
         y1=${PADDING}
         y2=${SVG_HEIGHT - PADDING}
-        stroke=${isCenter ? 'rgba(23,36,34,0.28)' : 'rgba(23,36,34,0.1)'}
+        stroke=${isCenter ? VIEWER_COLORS.gridStrong : VIEWER_COLORS.grid}
         strokeWidth=${isCenter ? '1.8' : '1'}
       ></line>
     `);
@@ -1894,19 +2237,19 @@ function gridLines(scene, project) {
         x2=${SVG_WIDTH - PADDING}
         y1=${y}
         y2=${y}
-        stroke=${isCenter ? 'rgba(23,36,34,0.28)' : 'rgba(23,36,34,0.1)'}
+        stroke=${isCenter ? VIEWER_COLORS.gridStrong : VIEWER_COLORS.grid}
         strokeWidth=${isCenter ? '1.8' : '1'}
       ></line>
     `);
   }
 
   lines.push(html`
-    <text key="bounds" x="18" y="28" fill="rgba(23,36,34,0.68)" font-size="14">
+    <text key="bounds" x="18" y="28" fill=${VIEWER_COLORS.textMuted} font-size="14">
       ${scene.config.label} plane | focus ${scene.focusTrack ? displayTrack(scene.focusTrack) : 'none'} | ${AXIS_LABELS[horizontalAxis]} ${centerHorizontal.toFixed(2)} | ${AXIS_LABELS[verticalAxis]} ${centerVertical.toFixed(2)}
     </text>
   `);
   lines.push(html`
-    <text key="step" x=${SVG_WIDTH - 240} y=${SVG_HEIGHT - 18} fill="rgba(23,36,34,0.55)" font-size="14">
+    <text key="step" x=${SVG_WIDTH - 240} y=${SVG_HEIGHT - 18} fill=${VIEWER_COLORS.textMuted} font-size="14">
       grid ${step.toFixed(2)} units
     </text>
   `);
@@ -2148,6 +2491,10 @@ function wrapDegrees(value) {
   return wrapped;
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, Number(value || 0)));
+}
+
 function formatVector(vector) {
   return `${vector.x.toFixed(3)}, ${vector.y.toFixed(3)}, ${vector.z.toFixed(3)}`;
 }
@@ -2206,6 +2553,10 @@ function maxTrackLength(tracks) {
 
 function degreesFromRadians(value) {
   return (value * 180) / Math.PI;
+}
+
+function degreesToRadians(value) {
+  return (Number(value || 0) * Math.PI) / 180;
 }
 
 function validationCheckForTrack(data, track) {
@@ -2473,6 +2824,185 @@ function renderConversionStatus(state, onLoadOutput) {
       </${Stack}>
     </${Alert}>
   `;
+}
+
+function render3DSvg(scene) {
+  const projector = createProjector3D(scene);
+  const entries = [...scene.entries].sort((left, right) => {
+    const leftDepth = left.currentPoint3D ? projector(left.currentPoint3D).depth : -Infinity;
+    const rightDepth = right.currentPoint3D ? projector(right.currentPoint3D).depth : -Infinity;
+    return leftDepth - rightDepth;
+  });
+  return html`
+    <svg viewBox=${`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} preserveAspectRatio="xMidYMid meet" style=${{ width: '100%', height: '100%', display: 'block' }}>
+      <defs>
+        <linearGradient id="viewerStageGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="rgba(255, 159, 69, 0.16)" />
+          <stop offset="100%" stop-color="rgba(102, 216, 201, 0.05)" />
+        </linearGradient>
+      </defs>
+      <rect width=${SVG_WIDTH} height=${SVG_HEIGHT} fill="url(#viewerStageGlow)"></rect>
+      ${render3DGrid(scene, projector)}
+      ${entries.map((entry) => {
+        const color = colorForActor(entry.actorID);
+        const trailPoints3D = entry.trail3D.map((point) => projector(point)).map((point) => `${point.x},${point.y}`).join(' ');
+        const currentPoint = entry.currentPoint3D ? projector(entry.currentPoint3D) : null;
+        const groundPoint = entry.currentPoint3D ? projector({ x: entry.currentPoint3D.x, y: entry.currentPoint3D.y, z: 0 }) : null;
+        const isFocus = scene.focusTrack?.actorID === entry.actorID;
+        return html`
+          <g key=${`three-${entry.actorID}`}>
+            ${trailPoints3D ? html`<polyline fill="none" stroke=${color} strokeWidth=${isFocus ? '4' : '2.5'} strokeOpacity=${isFocus ? '0.95' : '0.68'} points=${trailPoints3D}></polyline>` : null}
+            ${currentPoint && groundPoint ? html`
+              <line x1=${groundPoint.x} y1=${groundPoint.y} x2=${currentPoint.x} y2=${currentPoint.y} stroke=${alpha(color, 0.55)} strokeWidth="2"></line>
+              <circle cx=${groundPoint.x} cy=${groundPoint.y} r="4" fill=${alpha(color, 0.22)} stroke=${alpha(color, 0.48)} strokeWidth="1.2"></circle>
+            ` : null}
+            ${currentPoint ? html`
+              ${isFocus ? html`<circle cx=${currentPoint.x} cy=${currentPoint.y} r="16" fill="none" stroke=${alpha(color, 0.4)} strokeWidth="3"></circle>` : null}
+              <circle cx=${currentPoint.x} cy=${currentPoint.y} r=${isFocus ? '8' : '6'} fill=${color}></circle>
+              <text x=${currentPoint.x + 10} y=${currentPoint.y - 10} fill=${VIEWER_COLORS.text} font-size="14" font-weight="700">${displayTrack(entry)}</text>
+            ` : null}
+          </g>
+        `;
+      })}
+      <text x="18" y="28" fill=${VIEWER_COLORS.textMuted} font-size="14">
+        3D viewport | yaw ${scene.yawDeg.toFixed(0)}deg | pitch ${scene.pitchDeg.toFixed(0)}deg | zoom ${scene.zoom.toFixed(2)}x
+      </text>
+      <text x=${SVG_WIDTH - 360} y=${SVG_HEIGHT - 18} fill=${VIEWER_COLORS.textMuted} font-size="14">
+        focus ${scene.focusTrack ? displayTrack(scene.focusTrack) : 'none'} | z span ${scene.bounds3D.spanZ.toFixed(2)} | pan ${scene.pan.x.toFixed(0)}, ${scene.pan.y.toFixed(0)}
+      </text>
+    </svg>
+  `;
+}
+
+function render3DGrid(scene, projector) {
+  const step = scene.gridStep;
+  const extent = scene.gridExtent;
+  const lines = [];
+  for (let value = -extent, index = 0; value <= extent + step * 0.5 && index < 120; value += step, index += 1) {
+    const a = projector({ x: value, y: -extent, z: 0 });
+    const b = projector({ x: value, y: extent, z: 0 });
+    const center = Math.abs(value) < step * 0.001;
+    lines.push(html`<line key=${`gx-${index}`} x1=${a.x} y1=${a.y} x2=${b.x} y2=${b.y} stroke=${center ? VIEWER_COLORS.gridStrong : VIEWER_COLORS.grid} strokeWidth=${center ? '1.8' : '1'}></line>`);
+  }
+  for (let value = -extent, index = 0; value <= extent + step * 0.5 && index < 120; value += step, index += 1) {
+    const a = projector({ x: -extent, y: value, z: 0 });
+    const b = projector({ x: extent, y: value, z: 0 });
+    const center = Math.abs(value) < step * 0.001;
+    lines.push(html`<line key=${`gy-${index}`} x1=${a.x} y1=${a.y} x2=${b.x} y2=${b.y} stroke=${center ? VIEWER_COLORS.gridStrong : VIEWER_COLORS.grid} strokeWidth=${center ? '1.8' : '1'}></line>`);
+  }
+  const axisLength = Math.max(step * 1.6, 2.5);
+  const origin = projector({ x: 0, y: 0, z: 0 });
+  const xAxis = projector({ x: axisLength, y: 0, z: 0 });
+  const yAxis = projector({ x: 0, y: axisLength, z: 0 });
+  const zAxis = projector({ x: 0, y: 0, z: axisLength });
+  lines.push(html`<line key="axis-x" x1=${origin.x} y1=${origin.y} x2=${xAxis.x} y2=${xAxis.y} stroke=${VIEWER_COLORS.accentWarm} strokeWidth="2.4"></line>`);
+  lines.push(html`<line key="axis-y" x1=${origin.x} y1=${origin.y} x2=${yAxis.x} y2=${yAxis.y} stroke=${VIEWER_COLORS.accentCool} strokeWidth="2.4"></line>`);
+  lines.push(html`<line key="axis-z" x1=${origin.x} y1=${origin.y} x2=${zAxis.x} y2=${zAxis.y} stroke=${VIEWER_COLORS.accentBlue} strokeWidth="2.4"></line>`);
+  lines.push(html`<text key="axis-x-label" x=${xAxis.x + 8} y=${xAxis.y - 6} fill=${VIEWER_COLORS.accentWarm} font-size="14" font-weight="700">X</text>`);
+  lines.push(html`<text key="axis-y-label" x=${yAxis.x + 8} y=${yAxis.y - 6} fill=${VIEWER_COLORS.accentCool} font-size="14" font-weight="700">Y</text>`);
+  lines.push(html`<text key="axis-z-label" x=${zAxis.x + 8} y=${zAxis.y - 6} fill=${VIEWER_COLORS.accentBlue} font-size="14" font-weight="700">Z</text>`);
+  return lines;
+}
+
+function buildScene3D(tracks, focusTrack, cursor, trailLength, yawDeg, pitchDeg, zoom, pan) {
+  const focusPosition = positionAt(focusTrack, cursor) || { x: 0, y: 0, z: 0 };
+  const entries = tracks.map((track) => {
+    const trail = trailPoints(track, cursor, trailLength).map((sample) => ({
+      x: Number(sample.position.x || 0) - Number(focusPosition.x || 0),
+      y: Number(sample.position.y || 0) - Number(focusPosition.y || 0),
+      z: Number(sample.position.z || 0) - Number(focusPosition.z || 0),
+    }));
+    const currentPosition = positionAt(track, cursor);
+    const currentPoint3D = currentPosition ? {
+      x: Number(currentPosition.x || 0) - Number(focusPosition.x || 0),
+      y: Number(currentPosition.y || 0) - Number(focusPosition.y || 0),
+      z: Number(currentPosition.z || 0) - Number(focusPosition.z || 0),
+    } : null;
+    return {
+      ...track,
+      trail3D: trail,
+      currentPoint3D,
+    };
+  });
+  const bounds3D = compute3DBounds(entries);
+  return {
+    entries,
+    focusTrack,
+    yawDeg,
+    pitchDeg,
+    zoom,
+    pan: pan || { x: 0, y: 0 },
+    gridStep: niceGridStep(Math.max(bounds3D.spanX, bounds3D.spanY, 1)),
+    gridExtent: Math.max(bounds3D.spanX, bounds3D.spanY, 6) * 0.82,
+    bounds3D,
+  };
+}
+
+function compute3DBounds(entries) {
+  const points = [];
+  entries.forEach((entry) => {
+    entry.trail3D.forEach((point) => points.push(point));
+    if (entry.currentPoint3D) {
+      points.push(entry.currentPoint3D);
+    }
+  });
+  if (points.length === 0) {
+    return { minX: -1, maxX: 1, minY: -1, maxY: 1, minZ: -1, maxZ: 1, spanX: 2, spanY: 2, spanZ: 2 };
+  }
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  points.forEach((point) => {
+    minX = Math.min(minX, point.x);
+    maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y);
+    maxY = Math.max(maxY, point.y);
+    minZ = Math.min(minZ, point.z);
+    maxZ = Math.max(maxZ, point.z);
+  });
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    minZ,
+    maxZ,
+    spanX: Math.max(maxX - minX, 1),
+    spanY: Math.max(maxY - minY, 1),
+    spanZ: Math.max(maxZ - minZ, 0),
+  };
+}
+
+function createProjector3D(scene) {
+  const yaw = degreesToRadians(scene.yawDeg);
+  const pitch = degreesToRadians(scene.pitchDeg);
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const cp = Math.cos(pitch);
+  const sp = Math.sin(pitch);
+  const maxSpan = Math.max(scene.bounds3D.spanX, scene.bounds3D.spanY, scene.bounds3D.spanZ + 2, 1);
+  const scale = ((SVG_HEIGHT - PADDING * 2) / maxSpan) * 0.52 * scene.zoom;
+  const cameraDistance = maxSpan * 2.6 + 6;
+  const centerX = (SVG_WIDTH / 2) + Number(scene.pan?.x || 0);
+  const centerY = (SVG_HEIGHT / 2) + 24 + Number(scene.pan?.y || 0);
+  return (point) => {
+    const x = Number(point?.x || 0);
+    const y = Number(point?.y || 0);
+    const z = Number(point?.z || 0);
+    const yawX = (x * cy) - (y * sy);
+    const yawY = (x * sy) + (y * cy);
+    const pitchY = (yawY * cp) - (z * sp);
+    const pitchZ = (yawY * sp) + (z * cp);
+    const perspective = cameraDistance / Math.max(cameraDistance - pitchZ, cameraDistance * 0.35);
+    return {
+      x: centerX + yawX * scale * perspective,
+      y: centerY - pitchY * scale * perspective,
+      depth: pitchZ,
+    };
+  };
 }
 
 function describeConversionKind(kind) {

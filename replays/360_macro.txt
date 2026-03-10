@@ -1,0 +1,71 @@
+{
+  "mode": "timeline",
+  "commands": [
+    {
+      "label": "Section 1: smoother, tighter 2x circle run with Shift+W",
+      "type": "holdkey",
+      "keys": ["shift", "w"],
+      "at": "0ms",
+      "duration": "9500ms"
+    },
+    { "type": "mousemove", "at": "1000ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "1000ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "1400ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "1800ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "2200ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "2600ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "3000ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "3400ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "3800ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "4200ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "4600ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "5000ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "5400ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "5800ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "6200ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "6600ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "7000ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "7400ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "7800ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "8200ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+    { "type": "mousemove", "at": "8600ms", "dx": 867, "dy": 0, "duration": "400ms", "easing": "linear" },
+
+    {
+      "label": "Section 2: tighter sprinted 90-degree turns",
+      "type": "holdkey",
+      "keys": ["shift", "w"],
+      "at": "10200ms",
+      "duration": "6800ms"
+    },
+    { "type": "mousemove", "at": "10400ms", "dx": 2168, "dy": 0, "duration": "320ms", "easing": "linear" },
+    { "type": "mousemove", "at": "11900ms", "dx": 2168, "dy": 0, "duration": "320ms", "easing": "linear" },
+    { "type": "mousemove", "at": "13400ms", "dx": 2168, "dy": 0, "duration": "320ms", "easing": "linear" },
+    { "type": "mousemove", "at": "14900ms", "dx": 2168, "dy": 0, "duration": "320ms", "easing": "linear" },
+
+    {
+      "label": "Section 3: full 360 in 45-degree yaw steps (standing still), then vertical 45-degree steps up/down capped at +/-90",
+      "type": "mousemove",
+      "at": "17600ms",
+      "dx": 1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    { "type": "mousemove", "at": "18000ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "18400ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "18800ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "19200ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "19600ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "20000ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "20400ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+
+    { "type": "mousemove", "at": "21100ms", "dx": 0, "dy": -1084, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "21500ms", "dx": 0, "dy": -1084, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "21900ms", "dx": 0, "dy": 1084, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "22300ms", "dx": 0, "dy": 1084, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "22700ms", "dx": 0, "dy": 1084, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "23100ms", "dx": 0, "dy": 1084, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "23500ms", "dx": 0, "dy": -1084, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "23900ms", "dx": 0, "dy": -1084, "duration": "260ms", "easing": "linear" }
+  ]
+}

@@ -503,6 +503,128 @@ func movementDirectionProjectFusedTimeline(track MovementTrack, evals []movement
 	return out, true
 }
 
+func movementDirectionBestProjectedTimeline(track MovementTrack, candidates []MovementDirectionCandidate, evals []movementDirectionCandidateEval, fused *MovementDirectionFusedTrack, sameActor *MovementDirectionCandidate) (map[int]float64, bool) {
+	bestTimeline := map[int]float64(nil)
+	bestScore := -1.0
+	seen := map[string]bool{}
+	if timeline, ok := movementDirectionProjectFusedTimeline(track, evals, fused); ok {
+		score := movementDirectionProjectedTimelineScore(track, timeline, nil)
+		if score > bestScore {
+			bestTimeline = timeline
+			bestScore = score
+		}
+	}
+	if sameActor != nil && sameActor.MakesSense {
+		if timeline, ok := movementDirectionProjectCandidateTimeline(track, evals, *sameActor); ok {
+			score := movementDirectionProjectedTimelineScore(track, timeline, sameActor)
+			if score > bestScore {
+				bestTimeline = timeline
+				bestScore = score
+			}
+		}
+		seen[movementDirectionCandidateKey(*sameActor)] = true
+	}
+	for _, candidate := range candidates {
+		key := movementDirectionCandidateKey(candidate)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		if !candidate.MakesSense {
+			continue
+		}
+		if candidate.SampleCount < 24 {
+			continue
+		}
+		if candidate.Alignment != "time" && !strings.Contains(candidate.Source, "late-") {
+			continue
+		}
+		timeline, ok := movementDirectionProjectCandidateTimeline(track, evals, candidate)
+		if !ok {
+			continue
+		}
+		score := movementDirectionProjectedTimelineScore(track, timeline, &candidate)
+		if score > bestScore {
+			bestTimeline = timeline
+			bestScore = score
+		}
+	}
+	if bestTimeline == nil {
+		return nil, false
+	}
+	return bestTimeline, true
+}
+
+func movementDirectionProjectedTimelineScore(track MovementTrack, timeline map[int]float64, candidate *MovementDirectionCandidate) float64 {
+	if len(track.Samples) == 0 || len(timeline) == 0 {
+		return -1
+	}
+	coverage := movementPercent(len(timeline), len(track.Samples))
+	if coverage <= 0 {
+		return -1
+	}
+	changes := 0
+	hasPrevious := false
+	previous := 0.0
+	minValue := 0.0
+	maxValue := 0.0
+	for sampleIndex := range track.Samples {
+		angle, ok := timeline[sampleIndex]
+		if !ok {
+			continue
+		}
+		if !hasPrevious {
+			previous = angle
+			minValue = angle
+			maxValue = angle
+			hasPrevious = true
+			continue
+		}
+		current := angle
+		for current-previous > 180 {
+			current -= 360
+		}
+		for current-previous < -180 {
+			current += 360
+		}
+		if math.Abs(current-previous) >= 1 {
+			changes++
+		}
+		if current < minValue {
+			minValue = current
+		}
+		if current > maxValue {
+			maxValue = current
+		}
+		previous = current
+	}
+	span := math.Abs(maxValue - minValue)
+	score := coverage*4 + math.Min(span, 1440)/12 + math.Min(float64(changes), float64(len(track.Samples)))/3
+	if candidate != nil {
+		score += candidate.MeanCosineAgreement * 50
+		score -= candidate.MeanErrorDegrees / 6
+		if candidate.Alignment == "time" {
+			score += 10
+		}
+		if strings.Contains(candidate.Source, "late-") {
+			score += 8
+		}
+		if candidate.ActorID == track.ActorID {
+			score += 4
+		}
+	}
+	if coverage < 25 {
+		score -= 40
+	}
+	if span < 45 {
+		score -= 30
+	}
+	if changes < 16 {
+		score -= 20
+	}
+	return score
+}
+
 func movementTrackAngleSamples(track MovementTrack) []movementDirectionAngleSample {
 	out := make([]movementDirectionAngleSample, 0, len(track.Samples))
 	for sampleIndex, sample := range track.Samples {

@@ -6,7 +6,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/redraskal/r6-dissect/dissect"
 
@@ -111,6 +113,7 @@ func setup() {
 	pflag.Bool("info", false, "prints the replay header")
 	pflag.Bool("movement", false, "exports experimental movement/rotation tracks for a replay file")
 	pflag.Bool("movement-probe", false, "exports movement prop/pair probe data for a replay file")
+	pflag.Int("movement-workers", 0, "sets the worker count for batch movement folder export (0 = auto)")
 	pflag.Bool("blender-camera", false, "exports a Blender Python camera importer for one replay track")
 	pflag.String("position-prop", "", "overrides the auto-selected movement position prop id (24 hex chars)")
 	pflag.String("rotation-prop", "", "overrides the auto-selected movement rotation prop id (24 hex chars)")
@@ -125,6 +128,10 @@ func setup() {
 	pflag.Float64("camera-yaw-sign", 1, "multiplies exported Blender yaw by this sign")
 	pflag.Float64("camera-pitch-sign", 1, "multiplies exported Blender pitch by this sign")
 	pflag.Float64("camera-roll-sign", 1, "multiplies exported Blender roll by this sign")
+	pflag.Bool("camera-level", false, "exports a level camera when recovered heading is available by zeroing pitch/roll before applying offsets")
+	pflag.Float64("camera-yaw-offset-deg", 0, "adds a constant yaw offset in degrees to the exported Blender camera")
+	pflag.Float64("camera-pitch-offset-deg", 0, "adds a constant pitch offset in degrees to the exported Blender camera")
+	pflag.Float64("camera-roll-offset-deg", 0, "adds a constant roll offset in degrees to the exported Blender camera")
 	pflag.BoolP("version", "v", false, "prints the version")
 	pflag.Parse()
 	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
@@ -260,12 +267,74 @@ func writeMatchMovement(in *os.File, outputPath string) error {
 			return mkdirErr
 		}
 	}
-	for _, replayPath := range paths {
-		if err := writeReplayMovementFile(replayPath, filepath.Join(outputDir, movementOutputName(replayPath))); err != nil {
-			return err
+	workers := movementWorkerCount(len(paths))
+	type movementJob struct {
+		index      int
+		replayPath string
+		outputPath string
+	}
+	type movementResult struct {
+		index int
+		err   error
+	}
+	jobs := make(chan movementJob)
+	results := make(chan movementResult, len(paths))
+	var wg sync.WaitGroup
+	for worker := 0; worker < workers; worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobs {
+				results <- movementResult{
+					index: job.index,
+					err:   writeReplayMovementFile(job.replayPath, job.outputPath),
+				}
+			}
+		}()
+	}
+	for index, replayPath := range paths {
+		jobs <- movementJob{
+			index:      index,
+			replayPath: replayPath,
+			outputPath: filepath.Join(outputDir, movementOutputName(replayPath)),
+		}
+	}
+	close(jobs)
+	wg.Wait()
+	close(results)
+	errs := make([]error, len(paths))
+	for result := range results {
+		errs[result.index] = result.err
+	}
+	for index, replayPath := range paths {
+		if errs[index] != nil {
+			return fmt.Errorf("%s: %w", replayPath, errs[index])
 		}
 	}
 	return nil
+}
+
+func movementWorkerCount(jobCount int) int {
+	if jobCount <= 0 {
+		return 1
+	}
+	if workers := viper.GetInt("movement-workers"); workers > 0 {
+		if workers > jobCount {
+			return jobCount
+		}
+		return workers
+	}
+	workers := runtime.NumCPU() / 2
+	if workers < 1 {
+		workers = 1
+	}
+	if workers > 12 {
+		workers = 12
+	}
+	if workers > jobCount {
+		return jobCount
+	}
+	return workers
 }
 
 func writeReplayMovementFile(inputPath string, outputPath string) error {
@@ -274,12 +343,29 @@ func writeReplayMovementFile(inputPath string, outputPath string) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.Create(outputPath)
+	tempPath := outputPath + ".tmp"
+	out, err := os.Create(tempPath)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
-	return writeRoundMovement(in, out)
+	keepTemp := true
+	defer func() {
+		out.Close()
+		if keepTemp {
+			_ = os.Remove(tempPath)
+		}
+	}()
+	if err := writeRoundMovement(in, out); err != nil {
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, outputPath); err != nil {
+		return err
+	}
+	keepTemp = false
+	return nil
 }
 
 func movementOutputName(inputPath string) string {
@@ -335,6 +421,10 @@ func blenderCameraOptionsFromFlags() dissect.BlenderCameraOptions {
 		YawSign:         viper.GetFloat64("camera-yaw-sign"),
 		PitchSign:       viper.GetFloat64("camera-pitch-sign"),
 		RollSign:        viper.GetFloat64("camera-roll-sign"),
+		LevelCamera:     viper.GetBool("camera-level"),
+		YawOffsetDeg:    viper.GetFloat64("camera-yaw-offset-deg"),
+		PitchOffsetDeg:  viper.GetFloat64("camera-pitch-offset-deg"),
+		RollOffsetDeg:   viper.GetFloat64("camera-roll-offset-deg"),
 	}
 }
 
