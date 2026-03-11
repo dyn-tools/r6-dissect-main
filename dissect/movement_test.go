@@ -1588,6 +1588,52 @@ func TestMovementDataY11AttachesRecoveredTailClock(t *testing.T) {
 	}
 }
 
+func TestMovementApplyDerivedViewingDirectionsBackfillsSinglePrimaryTrackFromRotation(t *testing.T) {
+	actorID := "solo"
+	track := MovementTrack{
+		ActorID: actorID,
+		Samples: []MovementSample{
+			{RotationDegrees: &Vector3{Z: 0}},
+			{RotationDegrees: &Vector3{Z: 90}},
+			{RotationDegrees: &Vector3{Z: 180}},
+			{RotationDegrees: &Vector3{Z: -90}},
+		},
+	}
+	ordered, primary := movementApplyDerivedViewingDirections([]MovementTrack{track}, []MovementTrack{{ActorID: actorID}}, movementDirectionSearchResult{})
+	if len(ordered) != 1 || len(primary) != 1 {
+		t.Fatalf("unexpected track counts: ordered=%d primary=%d", len(ordered), len(primary))
+	}
+	for index, sample := range ordered[0].Samples {
+		if sample.ViewingDirectionDegrees == nil {
+			t.Fatalf("expected backfilled viewing direction at index %d", index)
+		}
+		if math.Abs(*sample.ViewingDirectionDegrees-float64(sample.RotationDegrees.Z)) > 0.001 {
+			t.Fatalf("unexpected backfilled heading at index %d: got %f want %f", index, *sample.ViewingDirectionDegrees, sample.RotationDegrees.Z)
+		}
+	}
+}
+
+func TestMovementApplyDerivedViewingDirectionsKeepsGoodDerivedTimeline(t *testing.T) {
+	actorID := "solo"
+	track := MovementTrack{
+		ActorID: actorID,
+		Samples: []MovementSample{
+			{RotationDegrees: &Vector3{Z: -120}},
+			{RotationDegrees: &Vector3{Z: -40}},
+			{RotationDegrees: &Vector3{Z: 30}},
+			{RotationDegrees: &Vector3{Z: 100}},
+		},
+	}
+	derived := map[int]float64{0: -10, 1: 15, 2: 45, 3: 90}
+	ordered, _ := movementApplyDerivedViewingDirections([]MovementTrack{track}, []MovementTrack{{ActorID: actorID}}, movementDirectionSearchResult{derivedByActor: map[string]map[int]float64{actorID: derived}})
+	for index, want := range []float64{-10, 15, 45, 90} {
+		got := ordered[0].Samples[index].ViewingDirectionDegrees
+		if got == nil || math.Abs(*got-want) > 0.001 {
+			t.Fatalf("expected derived heading at index %d, got %+v want %f", index, got, want)
+		}
+	}
+}
+
 func movementY11PositionRecord(actor []byte, prop []byte, x, y, z float32) []byte {
 	rec := movementY11RecordBase(actor, prop)
 	binary.LittleEndian.PutUint32(rec[30:34], math.Float32bits(x))

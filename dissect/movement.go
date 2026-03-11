@@ -167,10 +167,12 @@ func (r *Reader) MovementDataOptions(options MovementOptions) MovementOutput {
 }
 
 func movementApplyDerivedViewingDirections(ordered []MovementTrack, primary []MovementTrack, direction movementDirectionSearchResult) ([]MovementTrack, []MovementTrack) {
-	if len(direction.derivedByActor) == 0 && len(direction.timelineByActor) == 0 {
-		return ordered, primary
+	primaryActors := map[string]bool{}
+	for _, track := range primary {
+		primaryActors[track.ActorID] = true
 	}
 	for trackIndex := range ordered {
+		hadDerived := false
 		if timeline, ok := direction.timelineByActor[ordered[trackIndex].ActorID]; ok {
 			for sampleIndex, viewingDegrees := range timeline {
 				if sampleIndex < 0 || sampleIndex >= len(ordered[trackIndex].Samples) {
@@ -178,6 +180,7 @@ func movementApplyDerivedViewingDirections(ordered []MovementTrack, primary []Mo
 				}
 				value := viewingDegrees
 				ordered[trackIndex].Samples[sampleIndex].ViewingDirectionDegrees = &value
+				hadDerived = true
 			}
 		}
 		if derived, ok := direction.derivedByActor[ordered[trackIndex].ActorID]; ok {
@@ -187,10 +190,82 @@ func movementApplyDerivedViewingDirections(ordered []MovementTrack, primary []Mo
 				}
 				value := viewingDegrees
 				ordered[trackIndex].Samples[sampleIndex].ViewingDirectionDegrees = &value
+				hadDerived = true
 			}
+		}
+		if len(primaryActors) == 1 && primaryActors[ordered[trackIndex].ActorID] {
+			movementRotationBackfillViewingDirection(&ordered[trackIndex], hadDerived)
 		}
 	}
 	return ordered, movementPrimaryTracksFromOrdered(ordered, primary)
+}
+
+func movementRotationBackfillViewingDirection(track *MovementTrack, hadDerived bool) {
+	if track == nil || len(track.Samples) == 0 {
+		return
+	}
+	rotationCoverage, rotationSpan := movementViewingDirectionRotationCoverageAndSpan(*track)
+	if rotationCoverage < 10 || rotationSpan < 30 {
+		return
+	}
+	viewCoverage, viewSpan := movementViewingDirectionCoverageAndSpan(*track)
+	overwriteAll := !hadDerived || viewCoverage < 60 || (viewSpan < 30 && rotationSpan >= 90)
+	for sampleIndex := range track.Samples {
+		rotation := track.Samples[sampleIndex].RotationDegrees
+		if rotation == nil {
+			continue
+		}
+		if !overwriteAll && track.Samples[sampleIndex].ViewingDirectionDegrees != nil {
+			continue
+		}
+		value := movementWrapDegrees(float64(rotation.Z))
+		track.Samples[sampleIndex].ViewingDirectionDegrees = &value
+	}
+}
+
+func movementViewingDirectionCoverageAndSpan(track MovementTrack) (float64, float64) {
+	sequence := make([]float64, 0, len(track.Samples))
+	for _, sample := range track.Samples {
+		if sample.ViewingDirectionDegrees == nil {
+			continue
+		}
+		sequence = append(sequence, movementWrapDegrees(*sample.ViewingDirectionDegrees))
+	}
+	return movementPercent(len(sequence), len(track.Samples)), movementHeadingSequenceSpan(sequence)
+}
+
+func movementViewingDirectionRotationCoverageAndSpan(track MovementTrack) (float64, float64) {
+	sequence := make([]float64, 0, len(track.Samples))
+	for _, sample := range track.Samples {
+		if sample.RotationDegrees == nil {
+			continue
+		}
+		sequence = append(sequence, movementWrapDegrees(float64(sample.RotationDegrees.Z)))
+	}
+	return movementPercent(len(sequence), len(track.Samples)), movementHeadingSequenceSpan(sequence)
+}
+
+func movementHeadingSequenceSpan(sequence []float64) float64 {
+	if len(sequence) == 0 {
+		return 0
+	}
+	unwrapped := sequence[0]
+	minValue := unwrapped
+	maxValue := unwrapped
+	previous := sequence[0]
+	for index := 1; index < len(sequence); index++ {
+		current := sequence[index]
+		delta := movementWrapDegrees(current - previous)
+		unwrapped += delta
+		if unwrapped < minValue {
+			minValue = unwrapped
+		}
+		if unwrapped > maxValue {
+			maxValue = unwrapped
+		}
+		previous = current
+	}
+	return maxValue - minValue
 }
 
 func movementTracksForProps(header Header, feedback []MatchUpdate, buf []byte, start int, positionProp []byte, rotationProp []byte, zeroActorPrefixes map[string]int, annotate bool) ([]MovementTrack, []MovementTrack) {
