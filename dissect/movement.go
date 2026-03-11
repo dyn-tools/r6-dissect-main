@@ -44,6 +44,7 @@ type MovementSample struct {
 	Rotation                *Vector3 `json:"rotation,omitempty"`
 	RotationDegrees         *Vector3 `json:"rotationDegrees,omitempty"`
 	ViewingDirectionDegrees *float64 `json:"viewingDirectionDegrees,omitempty"`
+	ViewPitchDegrees        *float64 `json:"viewPitchDegrees,omitempty"`
 }
 
 type MovementTrack struct {
@@ -173,7 +174,10 @@ func movementApplyDerivedViewingDirections(ordered []MovementTrack, primary []Mo
 	}
 	for trackIndex := range ordered {
 		hadDerived := false
+		derivedCount := 0
+		hadPitchDerived := false
 		if timeline, ok := direction.timelineByActor[ordered[trackIndex].ActorID]; ok {
+			derivedCount = len(timeline)
 			for sampleIndex, viewingDegrees := range timeline {
 				if sampleIndex < 0 || sampleIndex >= len(ordered[trackIndex].Samples) {
 					continue
@@ -184,6 +188,9 @@ func movementApplyDerivedViewingDirections(ordered []MovementTrack, primary []Mo
 			}
 		}
 		if derived, ok := direction.derivedByActor[ordered[trackIndex].ActorID]; ok {
+			if len(derived) > derivedCount {
+				derivedCount = len(derived)
+			}
 			for sampleIndex, viewingDegrees := range derived {
 				if sampleIndex < 0 || sampleIndex >= len(ordered[trackIndex].Samples) {
 					continue
@@ -193,14 +200,146 @@ func movementApplyDerivedViewingDirections(ordered []MovementTrack, primary []Mo
 				hadDerived = true
 			}
 		}
+		if pitchTimeline, ok := direction.pitchTimelineByActor[ordered[trackIndex].ActorID]; ok {
+			for sampleIndex, pitchDegrees := range pitchTimeline {
+				if sampleIndex < 0 || sampleIndex >= len(ordered[trackIndex].Samples) {
+					continue
+				}
+				value := pitchDegrees
+				ordered[trackIndex].Samples[sampleIndex].ViewPitchDegrees = &value
+				hadPitchDerived = true
+			}
+		}
 		if len(primaryActors) == 1 && primaryActors[ordered[trackIndex].ActorID] {
-			movementRotationBackfillViewingDirection(&ordered[trackIndex], hadDerived)
+			movementRotationFitViewingDirection(&ordered[trackIndex], hadDerived, derivedCount)
+			if !hadPitchDerived {
+				movementAttachExperimentalViewPitch(&ordered[trackIndex])
+			}
 		}
 	}
 	return ordered, movementPrimaryTracksFromOrdered(ordered, primary)
 }
 
-func movementRotationBackfillViewingDirection(track *MovementTrack, hadDerived bool) {
+func movementAttachExperimentalViewPitch(track *MovementTrack) {
+	if track == nil || len(track.Samples) == 0 {
+		return
+	}
+	axis := movementGuessViewPitchAxis(*track)
+	if axis == "" {
+		return
+	}
+	for index := range track.Samples {
+		sample := &track.Samples[index]
+		if sample.RotationDegrees == nil {
+			continue
+		}
+		value := movementFoldPitchDegrees(float64(blenderAxisComponent(*sample.RotationDegrees, axis)))
+		sample.ViewPitchDegrees = &value
+	}
+}
+
+func movementGuessViewPitchAxis(track MovementTrack) string {
+	type axisScore struct {
+		axis  string
+		score float64
+	}
+	stationary := movementTrackStationarySampleIndexes(track)
+	scores := []axisScore{}
+	for _, axis := range []string{"x", "y", "z"} {
+		overall := []float64{}
+		stationaryValues := []float64{}
+		rotationOnlyValues := []float64{}
+		yawStableReward := 0.0
+		yawLeakPenalty := 0.0
+		pitchSignalReward := 0.0
+		deltaPairs := 0
+		for index, sample := range track.Samples {
+			if sample.RotationDegrees == nil {
+				continue
+			}
+			value := movementFoldPitchDegrees(float64(blenderAxisComponent(*sample.RotationDegrees, axis)))
+			overall = append(overall, value)
+			if stationary[index] {
+				stationaryValues = append(stationaryValues, value)
+			}
+			if sample.Position == nil {
+				rotationOnlyValues = append(rotationOnlyValues, value)
+			}
+			if index+1 >= len(track.Samples) || track.Samples[index+1].RotationDegrees == nil {
+				continue
+			}
+			next := track.Samples[index+1]
+			if sample.ViewingDirectionDegrees == nil || next.ViewingDirectionDegrees == nil {
+				continue
+			}
+			currentPitch := movementFoldPitchDegrees(float64(blenderAxisComponent(*sample.RotationDegrees, axis)))
+			nextPitch := movementFoldPitchDegrees(float64(blenderAxisComponent(*next.RotationDegrees, axis)))
+			yawDelta := math.Abs(movementWrapDegrees(*next.ViewingDirectionDegrees - *sample.ViewingDirectionDegrees))
+			pitchDelta := math.Abs(nextPitch - currentPitch)
+			if stationary[index] || stationary[index+1] || sample.Position == nil || next.Position == nil {
+				deltaPairs++
+				switch {
+				case yawDelta >= 8 && pitchDelta <= 1:
+					yawStableReward += 1
+				case yawDelta >= 8 && pitchDelta >= 4:
+					yawLeakPenalty += 1
+				case yawDelta <= 3 && pitchDelta >= 4:
+					pitchSignalReward += 1
+				}
+			}
+		}
+		if len(overall) < 8 {
+			continue
+		}
+		overallSpan := movementHeadingSequenceSpan(overall)
+		stationarySpan := movementHeadingSequenceSpan(stationaryValues)
+		rotationOnlySpan := movementHeadingSequenceSpan(rotationOnlyValues)
+		score := (stationarySpan * 0.75) + (rotationOnlySpan * 0.5) + (overallSpan * 0.1)
+		if deltaPairs > 0 {
+			score += (yawStableReward / float64(deltaPairs)) * 80
+			score += (pitchSignalReward / float64(deltaPairs)) * 60
+			score -= (yawLeakPenalty / float64(deltaPairs)) * 120
+		}
+		scores = append(scores, axisScore{axis: axis, score: score})
+	}
+	if len(scores) == 0 {
+		return ""
+	}
+	sort.Slice(scores, func(i, j int) bool {
+		return scores[i].score > scores[j].score
+	})
+	if scores[0].score <= 5 {
+		return ""
+	}
+	return scores[0].axis
+}
+
+func movementFoldPitchDegrees(value float64) float64 {
+	value = movementWrapDegrees(value)
+	for value > 90 {
+		value = 180 - value
+	}
+	for value < -90 {
+		value = -180 - value
+	}
+	return value
+}
+
+type movementRotationHeadingModel struct {
+	name   string
+	decode func(Vector3) (float64, bool)
+}
+
+type movementRotationHeadingFit struct {
+	model       movementRotationHeadingModel
+	offsetDeg   float64
+	meanError   float64
+	meanCosine  float64
+	coverage    float64
+	decodedSpan float64
+}
+
+func movementRotationFitViewingDirection(track *MovementTrack, hadDerived bool, derivedCount int) {
 	if track == nil || len(track.Samples) == 0 {
 		return
 	}
@@ -209,18 +348,164 @@ func movementRotationBackfillViewingDirection(track *MovementTrack, hadDerived b
 		return
 	}
 	viewCoverage, viewSpan := movementViewingDirectionCoverageAndSpan(*track)
+	bestFit, ok := movementBestRotationHeadingFit(*track, hadDerived)
+	if !ok {
+		return
+	}
 	overwriteAll := !hadDerived || viewCoverage < 60 || (viewSpan < 30 && rotationSpan >= 90)
+	if !overwriteAll && derivedCount > 0 && derivedCount*4 < len(track.Samples) && bestFit.coverage >= 80 {
+		overwriteAll = true
+	}
 	for sampleIndex := range track.Samples {
-		rotation := track.Samples[sampleIndex].RotationDegrees
+		rotation := track.Samples[sampleIndex].Rotation
 		if rotation == nil {
 			continue
 		}
 		if !overwriteAll && track.Samples[sampleIndex].ViewingDirectionDegrees != nil {
 			continue
 		}
-		value := movementWrapDegrees(float64(rotation.Z))
+		heading, ok := bestFit.model.decode(*rotation)
+		if !ok {
+			continue
+		}
+		value := movementWrapDegrees(heading + bestFit.offsetDeg)
 		track.Samples[sampleIndex].ViewingDirectionDegrees = &value
 	}
+}
+
+func movementBestRotationHeadingFit(track MovementTrack, requireAnchor bool) (movementRotationHeadingFit, bool) {
+	anchorCount := 0
+	for _, sample := range track.Samples {
+		if sample.ViewingDirectionDegrees != nil && sample.Rotation != nil {
+			anchorCount++
+		}
+	}
+	if requireAnchor && anchorCount < 4 {
+		return movementRotationHeadingFit{}, false
+	}
+	best := movementRotationHeadingFit{}
+	bestScore := -1.0
+	for _, model := range movementRotationHeadingModels() {
+		fit, ok := movementRotationHeadingModelFit(track, model)
+		if !ok {
+			continue
+		}
+		if requireAnchor && (fit.meanCosine < 0.82 || fit.meanError > 25) {
+			continue
+		}
+		if !requireAnchor && (fit.coverage < 40 || fit.decodedSpan < 45) {
+			continue
+		}
+		score := (fit.meanCosine * 3.0) + (fit.coverage / 100.0) + math.Min(2.0, fit.decodedSpan/180.0) - (fit.meanError / 45.0)
+		if score > bestScore {
+			best = fit
+			bestScore = score
+		}
+	}
+	if bestScore < 0 {
+		return movementRotationHeadingFit{}, false
+	}
+	return best, true
+}
+
+func movementRotationHeadingModels() []movementRotationHeadingModel {
+	return []movementRotationHeadingModel{
+		{
+			name: "rad-z",
+			decode: func(rotation Vector3) (float64, bool) {
+				return movementWrapDegrees(float64(rotation.Z) * 180 / math.Pi), true
+			},
+		},
+		{
+			name: "rad-neg-z",
+			decode: func(rotation Vector3) (float64, bool) {
+				return movementWrapDegrees(float64(-rotation.Z) * 180 / math.Pi), true
+			},
+		},
+		{
+			name: "hybrid-z-or-implicit-default",
+			decode: func(rotation Vector3) (float64, bool) {
+				if math.Abs(float64(rotation.X)) < 0.001 && math.Abs(float64(rotation.Y)) < 0.001 && math.Abs(float64(rotation.Z)) <= math.Pi+0.25 {
+					return movementWrapDegrees(float64(rotation.Z) * 180 / math.Pi), true
+				}
+				quat, ok := movementY11CandidateQuaternionWithModel(movementCandidate{
+					secondary:    rotation,
+					hasSecondary: true,
+				}, movementDefaultImplicitQuaternionModel)
+				if !ok {
+					return movementWrapDegrees(float64(rotation.Z) * 180 / math.Pi), true
+				}
+				euler := movementQuaternionToEuler(quat)
+				return movementWrapDegrees(float64(euler.Z) * 180 / math.Pi), true
+			},
+		},
+		{
+			name: "implicit-default-euler-z",
+			decode: func(rotation Vector3) (float64, bool) {
+				quat, ok := movementY11CandidateQuaternionWithModel(movementCandidate{
+					secondary:    rotation,
+					hasSecondary: true,
+				}, movementDefaultImplicitQuaternionModel)
+				if !ok {
+					return 0, false
+				}
+				euler := movementQuaternionToEuler(quat)
+				return movementWrapDegrees(float64(euler.Z) * 180 / math.Pi), true
+			},
+		},
+	}
+}
+
+func movementRotationHeadingModelFit(track MovementTrack, model movementRotationHeadingModel) (movementRotationHeadingFit, bool) {
+	differences := make([]float64, 0, len(track.Samples))
+	errors := make([]float64, 0, len(track.Samples))
+	decoded := make([]float64, 0, len(track.Samples))
+	decodedCount := 0
+	for _, sample := range track.Samples {
+		if sample.Rotation == nil {
+			continue
+		}
+		heading, ok := model.decode(*sample.Rotation)
+		if !ok {
+			continue
+		}
+		decoded = append(decoded, heading)
+		decodedCount++
+		if sample.ViewingDirectionDegrees == nil {
+			continue
+		}
+		differences = append(differences, movementWrapDegrees(*sample.ViewingDirectionDegrees-heading))
+	}
+	if len(differences) == 0 {
+		return movementRotationHeadingFit{}, false
+	}
+	offsetDeg := circularMeanDegrees(differences)
+	sumCosine := 0.0
+	sumError := 0.0
+	for _, sample := range track.Samples {
+		if sample.ViewingDirectionDegrees == nil || sample.Rotation == nil {
+			continue
+		}
+		heading, ok := model.decode(*sample.Rotation)
+		if !ok {
+			continue
+		}
+		errorDegrees := math.Abs(movementWrapDegrees(*sample.ViewingDirectionDegrees - (heading + offsetDeg)))
+		errors = append(errors, errorDegrees)
+		sumError += errorDegrees
+		sumCosine += math.Cos(errorDegrees * math.Pi / 180)
+	}
+	if len(errors) == 0 {
+		return movementRotationHeadingFit{}, false
+	}
+	return movementRotationHeadingFit{
+		model:       model,
+		offsetDeg:   offsetDeg,
+		meanError:   sumError / float64(len(errors)),
+		meanCosine:  sumCosine / float64(len(errors)),
+		coverage:    movementPercent(decodedCount, len(track.Samples)),
+		decodedSpan: movementHeadingSequenceSpan(decoded),
+	}, true
 }
 
 func movementViewingDirectionCoverageAndSpan(track MovementTrack) (float64, float64) {
@@ -266,6 +551,20 @@ func movementHeadingSequenceSpan(sequence []float64) float64 {
 		previous = current
 	}
 	return maxValue - minValue
+}
+
+func circularMeanDegrees(sequence []float64) float64 {
+	if len(sequence) == 0 {
+		return 0
+	}
+	sumSin := 0.0
+	sumCos := 0.0
+	for _, value := range sequence {
+		radians := value * math.Pi / 180
+		sumSin += math.Sin(radians)
+		sumCos += math.Cos(radians)
+	}
+	return movementWrapDegrees(math.Atan2(sumSin, sumCos) * 180 / math.Pi)
 }
 
 func movementTracksForProps(header Header, feedback []MatchUpdate, buf []byte, start int, positionProp []byte, rotationProp []byte, zeroActorPrefixes map[string]int, annotate bool) ([]MovementTrack, []MovementTrack) {

@@ -287,6 +287,10 @@ func renderBlenderCameraScript(data MovementOutput, track MovementTrack, options
 	boundsName := "R6Bounds_" + cameraBaseName
 	collectionName := "R6 Replay Cameras"
 	bounds := blenderTrackBounds(track)
+	stableIndex := blenderStableStartIndex(track.Samples)
+	viewHeadingContinuous := blenderStableViewingHeadingContinuous(track.Samples, stableIndex)
+	viewHeadingWrapped := blenderWrappedViewingHeadingFromContinuous(viewHeadingContinuous)
+	baselinePitch, baselineRoll := blenderBaselinePitchRoll(track.Samples, options, viewHeadingContinuous, stableIndex)
 	var builder strings.Builder
 	builder.WriteString("import bpy\n")
 	builder.WriteString("import math\n\n")
@@ -408,8 +412,6 @@ func renderBlenderCameraScript(data MovementOutput, track MovementTrack, options
 	builder.WriteString("    bounds['r6_bounds_max_x'] = BOUNDS_MAX[0]\n")
 	builder.WriteString("    bounds['r6_bounds_max_y'] = BOUNDS_MAX[1]\n")
 	builder.WriteString("    bounds['r6_bounds_max_z'] = BOUNDS_MAX[2]\n\n")
-	viewHeadingWrapped := blenderWrappedViewingHeadingDegrees(track.Samples)
-	viewHeadingContinuous := blenderContinuousViewingHeadingDegrees(track.Samples)
 	lastFrame := 1
 	for index, sample := range track.Samples {
 		frame := 1 + (index * options.FrameStep)
@@ -423,6 +425,8 @@ func renderBlenderCameraScript(data MovementOutput, track MovementTrack, options
 			headingRadians = &value
 		}
 		cameraRotation := blenderCameraEuler(sample, options, headingRadians)
+		cameraRotation.X -= baselinePitch
+		cameraRotation.Y -= baselineRoll
 		fmt.Fprintf(&builder, "rig.location = (%s, %s, %s)\n",
 			blenderFloatString(float64(position.X)*options.Scale),
 			blenderFloatString(float64(position.Y)*options.Scale),
@@ -573,7 +577,7 @@ type blenderEuler struct {
 }
 
 func blenderCameraEuler(sample MovementSample, options BlenderCameraOptions, headingRadians *float64) blenderEuler {
-	pitch := options.PitchSign * blenderRotationValue(sample, options.PitchAxis, options.RotationMode)
+	pitch := options.PitchSign * blenderPitchValue(sample, options.PitchAxis, options.RotationMode)
 	roll := options.RollSign * blenderRotationValue(sample, options.RollAxis, options.RotationMode)
 	yaw := options.YawSign * blenderYawValue(sample, options.RotationMode, headingRadians)
 	if headingRadians != nil && options.LevelCamera {
@@ -588,6 +592,13 @@ func blenderCameraEuler(sample MovementSample, options BlenderCameraOptions, hea
 		Y: roll,
 		Z: yaw,
 	}
+}
+
+func blenderPitchValue(sample MovementSample, axis string, mode string) float64 {
+	if sample.ViewPitchDegrees != nil {
+		return degreesToRadians(*sample.ViewPitchDegrees)
+	}
+	return blenderRotationValue(sample, axis, mode)
 }
 
 func blenderRotationValue(sample MovementSample, axis string, mode string) float64 {
@@ -664,6 +675,98 @@ func blenderContinuousViewingHeadingDegrees(samples []MovementSample) []*float64
 	return values
 }
 
+func blenderWrappedViewingHeadingFromContinuous(values []*float64) []*float64 {
+	wrapped := make([]*float64, len(values))
+	for index, value := range values {
+		if value == nil {
+			continue
+		}
+		current := wrapDegrees(*value)
+		wrapped[index] = &current
+	}
+	return wrapped
+}
+
+func blenderStableStartIndex(samples []MovementSample) int {
+	for index, sample := range samples {
+		if sample.Position != nil {
+			return index
+		}
+	}
+	return 0
+}
+
+func blenderStableViewingHeadingContinuous(samples []MovementSample, stableIndex int) []*float64 {
+	values := blenderContinuousViewingHeadingDegrees(samples)
+	if stableIndex <= 0 || stableIndex >= len(values) || values[stableIndex] == nil {
+		return values
+	}
+	var headingMin float64
+	var headingMax float64
+	var rawZMin float64
+	var rawZMax float64
+	headingCount := 0
+	rawCount := 0
+	for index := 0; index < stableIndex; index++ {
+		if values[index] != nil {
+			value := *values[index]
+			if headingCount == 0 || value < headingMin {
+				headingMin = value
+			}
+			if headingCount == 0 || value > headingMax {
+				headingMax = value
+			}
+			headingCount++
+		}
+		if samples[index].RotationDegrees != nil {
+			value := float64(samples[index].RotationDegrees.Z)
+			if rawCount == 0 || value < rawZMin {
+				rawZMin = value
+			}
+			if rawCount == 0 || value > rawZMax {
+				rawZMax = value
+			}
+			rawCount++
+		}
+	}
+	if headingCount < 4 || rawCount < 4 {
+		return values
+	}
+	headingSpan := math.Abs(headingMax - headingMin)
+	rawSpan := math.Abs(rawZMax - rawZMin)
+	if headingSpan < 180 || rawSpan > 15 {
+		return values
+	}
+	baseline := *values[stableIndex]
+	for index := 0; index < stableIndex; index++ {
+		if values[index] == nil {
+			continue
+		}
+		value := baseline
+		values[index] = &value
+	}
+	return values
+}
+
+func blenderBaselinePitchRoll(samples []MovementSample, options BlenderCameraOptions, headings []*float64, stableIndex int) (float64, float64) {
+	if len(samples) == 0 {
+		return 0, 0
+	}
+	if stableIndex < 0 || stableIndex >= len(samples) {
+		stableIndex = 0
+	}
+	var headingRadians *float64
+	if stableIndex < len(headings) && headings[stableIndex] != nil {
+		value := degreesToRadians(*headings[stableIndex])
+		headingRadians = &value
+	}
+	base := blenderCameraEuler(samples[stableIndex], options, headingRadians)
+	if options.LevelCamera {
+		return 0, 0
+	}
+	return base.X, base.Y
+}
+
 func blenderAxisComponent(vector Vector3, axis string) float32 {
 	switch axis {
 	case "x":
@@ -680,6 +783,16 @@ func blenderFloatString(value float64) string {
 		return "0.0"
 	}
 	return strconv.FormatFloat(value, 'f', -1, 64)
+}
+
+func wrapDegrees(value float64) float64 {
+	for value > 180 {
+		value -= 360
+	}
+	for value < -180 {
+		value += 360
+	}
+	return value
 }
 
 func degreesToRadians(value float64) float64 {

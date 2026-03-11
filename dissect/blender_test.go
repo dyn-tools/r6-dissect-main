@@ -114,6 +114,22 @@ func TestBlenderCameraEulerSupportsLevelCameraOffsets(t *testing.T) {
 	}
 }
 
+func TestBlenderCameraEulerPrefersRecoveredPitchWhenAvailable(t *testing.T) {
+	viewHeading := 90.0
+	viewPitch := -35.0
+	sample := MovementSample{
+		RotationDegrees:         &Vector3{X: 15, Y: 25, Z: 35},
+		ViewingDirectionDegrees: &viewHeading,
+		ViewPitchDegrees:        &viewPitch,
+	}
+	headingRadians := degreesToRadians(viewHeading)
+
+	got := blenderCameraEuler(sample, normalizeBlenderCameraOptions(BlenderCameraOptions{}), &headingRadians)
+	if math.Abs(got.X-degreesToRadians(viewPitch)) > 0.0001 {
+		t.Fatalf("expected pitch from recovered view pitch, got %f", got.X)
+	}
+}
+
 func TestChooseBlenderCameraOutputPrefersDenserUsernameTrack(t *testing.T) {
 	header := Header{Players: []Player{{Username: "noa"}, {Username: "kds"}}}
 	baseline := MovementOutput{
@@ -250,7 +266,7 @@ func TestRenderBlenderCameraScriptIncludesMetadataAndKeyframes(t *testing.T) {
 		"camera.parent = rig",
 		"camera.rotation_euler = (0, 0, 0)",
 		"rig.location = (0.5, 1, 1.5)",
-		"rig.rotation_euler = (0.17453292519943295, 0.3490658503988659, 2.9670597283903604)",
+		"rig.rotation_euler = (0, 0, 2.9670597283903604)",
 		"rig.keyframe_insert(data_path='location', frame=3)",
 		"keyframe_prop(rig, 'r6_sample_offset', 10, 1)",
 		"keyframe_prop(rig, 'r6_view_heading_deg', 170, 1)",
@@ -264,4 +280,53 @@ func TestRenderBlenderCameraScriptIncludesMetadataAndKeyframes(t *testing.T) {
 			t.Fatalf("expected script to contain %q\n%s", snippet, script)
 		}
 	}
+}
+
+func TestBlenderStableViewingHeadingContinuousClampsWildPrefix(t *testing.T) {
+	views := []float64{96, 36, -24, -84, -144, -12, -72}
+	samples := make([]MovementSample, len(views))
+	for index, view := range views {
+		viewCopy := view
+		samples[index].ViewingDirectionDegrees = &viewCopy
+		samples[index].RotationDegrees = &Vector3{Z: 42.5}
+	}
+	samples[5].Position = &Vector3{X: 1}
+	samples[6].Position = &Vector3{X: 2}
+
+	values := blenderStableViewingHeadingContinuous(samples, blenderStableStartIndex(samples))
+	for index := 0; index < 5; index++ {
+		if values[index] == nil {
+			t.Fatalf("expected clamped prefix value at %d", index)
+		}
+		if math.Abs(*values[index]-(-12)) > 0.001 {
+			t.Fatalf("expected prefix to clamp to first stable heading, got %f at %d", *values[index], index)
+		}
+	}
+}
+
+func TestBlenderBaselinePitchRollUsesStableSample(t *testing.T) {
+	samples := []MovementSample{
+		{
+			RotationDegrees:         &Vector3{X: 10, Y: 20, Z: 30},
+			ViewingDirectionDegrees: float64Ptr(120),
+		},
+		{
+			Position:                &Vector3{X: 1},
+			RotationDegrees:         &Vector3{X: 15, Y: 25, Z: 35},
+			ViewingDirectionDegrees: float64Ptr(135),
+		},
+	}
+
+	headings := blenderStableViewingHeadingContinuous(samples, 1)
+	pitch, roll := blenderBaselinePitchRoll(samples, normalizeBlenderCameraOptions(BlenderCameraOptions{}), headings, 1)
+	if math.Abs(pitch-degreesToRadians(15)) > 0.0001 {
+		t.Fatalf("expected baseline pitch from stable sample, got %f", pitch)
+	}
+	if math.Abs(roll-degreesToRadians(25)) > 0.0001 {
+		t.Fatalf("expected baseline roll from stable sample, got %f", roll)
+	}
+}
+
+func float64Ptr(value float64) *float64 {
+	return &value
 }
