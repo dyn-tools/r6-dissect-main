@@ -185,6 +185,9 @@ func movementApplyDerivedViewingDirections(ordered []MovementTrack, primary []Mo
 				if sampleIndex < 0 || sampleIndex >= len(ordered[trackIndex].Samples) {
 					continue
 				}
+				if ordered[trackIndex].Samples[sampleIndex].ViewingDirectionDegrees != nil {
+					continue
+				}
 				value := viewingDegrees
 				ordered[trackIndex].Samples[sampleIndex].ViewingDirectionDegrees = &value
 			}

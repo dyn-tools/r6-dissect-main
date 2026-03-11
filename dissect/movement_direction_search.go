@@ -344,12 +344,8 @@ func movementDirectionSearchWithDerived(header Header, buf []byte, start int, ze
 		sameActorProbe = movementDirectionPropProbeForProp(inspectionStreams, candidates, bestSameActor.PropID)
 	}
 	timelineByActor := map[string]map[int]float64{}
-	if timeline, ok := movementDirectionProjectFusedTimeline(base, evals, bestFused); ok {
+	if timeline, ok := movementDirectionBestProjectedTimeline(base, candidates, evals, bestFused, bestSameActor); ok {
 		timelineByActor[base.ActorID] = timeline
-	} else if bestSameActor != nil && bestSameActor.MakesSense {
-		if timeline, ok := movementDirectionProjectCandidateTimeline(base, evals, *bestSameActor); ok {
-			timelineByActor[base.ActorID] = timeline
-		}
 	}
 	return movementDirectionSearchResult{
 		summary: &MovementDirectionSearch{
@@ -549,10 +545,48 @@ func movementDirectionBestProjectedTimeline(track MovementTrack, candidates []Mo
 			bestScore = score
 		}
 	}
+	if timeline, ok := movementDirectionProjectImplicitQuaternionTimeline(track); ok {
+		score := movementDirectionProjectedTimelineScore(track, timeline, nil) + 12
+		if score > bestScore {
+			bestTimeline = timeline
+			bestScore = score
+		}
+	}
 	if bestTimeline == nil {
 		return nil, false
 	}
 	return bestTimeline, true
+}
+
+func movementDirectionProjectImplicitQuaternionTimeline(track MovementTrack) (map[int]float64, bool) {
+	if len(track.Samples) == 0 {
+		return nil, false
+	}
+	out := map[int]float64{}
+	for sampleIndex, sample := range track.Samples {
+		if sample.Rotation == nil {
+			continue
+		}
+		qx := float64(sample.Rotation.X)
+		qy := float64(sample.Rotation.Y)
+		qz := float64(sample.Rotation.Z)
+		ww := 1 - ((qx * qx) + (qy * qy) + (qz * qz))
+		if ww < 0 {
+			if ww > -0.01 {
+				ww = 0
+			} else {
+				continue
+			}
+		}
+		quat := movementQuaternion{X: float32(qx), Y: float32(qy), Z: float32(qz), W: float32(math.Sqrt(ww))}
+		world := movementRotateVector(quat, Vector3{Z: 1})
+		heading := math.Atan2(float64(world.Y), float64(world.X)) * 180 / math.Pi
+		out[sampleIndex] = movementWrapDegrees(heading)
+	}
+	if movementPercent(len(out), len(track.Samples)) < 50 {
+		return nil, false
+	}
+	return out, true
 }
 
 func movementDirectionProjectedTimelineScore(track MovementTrack, timeline map[int]float64, candidate *MovementDirectionCandidate) float64 {
