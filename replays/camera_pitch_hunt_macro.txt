@@ -1,0 +1,130 @@
+{
+  "mode": "timeline",
+  "meta": {
+    "purpose": "Crack real camera pitch and validate yaw separately from body rotation",
+    "yawCalibration": {
+      "full360DotsSigned": 8670,
+      "full360Dots": 8670,
+      "half180Dots": 4335,
+      "quarter90Dots": 2168,
+      "eighth45Dots": 1084
+    },
+    "notes": [
+      "Run this solo.",
+      "Do not touch the mouse or keyboard outside the macro.",
+      "Start on flat ground with free sky/wall reference if possible.",
+      "Standing-still mouse-only windows are the main target for camera pitch recovery."
+    ]
+  },
+  "commands": [
+    {
+      "label": "Section 1: yaw-only 45-degree steps while standing still",
+      "type": "mousemove",
+      "at": "2000ms",
+      "dx": 1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    { "type": "mousemove", "at": "2500ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "3000ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "3500ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "4000ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "4500ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "5000ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "5500ms", "dx": 1084, "dy": 0, "duration": "260ms", "easing": "linear" },
+
+    {
+      "label": "Section 3: pitch-only small upward steps",
+      "type": "mousemove",
+      "at": "8000ms",
+      "dx": 0,
+      "dy": -480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    { "type": "mousemove", "at": "8500ms", "dx": 0, "dy": -480, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "9000ms", "dx": 0, "dy": -480, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "9500ms", "dx": 0, "dy": -480, "duration": "260ms", "easing": "linear" },
+
+    {
+      "label": "Section 5: pitch-only small downward steps",
+      "type": "mousemove",
+      "at": "11800ms",
+      "dx": 0,
+      "dy": 480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    { "type": "mousemove", "at": "12300ms", "dx": 0, "dy": 480, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "12800ms", "dx": 0, "dy": 480, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "13300ms", "dx": 0, "dy": 480, "duration": "260ms", "easing": "linear" },
+
+    {
+      "label": "Section 7: pitch-only medium upward steps",
+      "type": "mousemove",
+      "at": "15600ms",
+      "dx": 0,
+      "dy": -960,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    { "type": "mousemove", "at": "16100ms", "dx": 0, "dy": -960, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "16600ms", "dx": 0, "dy": -960, "duration": "260ms", "easing": "linear" },
+
+    {
+      "label": "Section 9: pitch-only medium downward steps",
+      "type": "mousemove",
+      "at": "18800ms",
+      "dx": 0,
+      "dy": 960,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    { "type": "mousemove", "at": "19300ms", "dx": 0, "dy": 960, "duration": "260ms", "easing": "linear" },
+    { "type": "mousemove", "at": "19800ms", "dx": 0, "dy": 960, "duration": "260ms", "easing": "linear" },
+
+    {
+      "label": "Section 11: combined yaw right plus pitch up",
+      "type": "mousemove",
+      "at": "22000ms",
+      "dx": 1084,
+      "dy": -720,
+      "duration": "320ms",
+      "easing": "linear"
+    },
+    { "type": "mousemove", "at": "22600ms", "dx": 1084, "dy": -720, "duration": "320ms", "easing": "linear" },
+    { "type": "mousemove", "at": "23200ms", "dx": 1084, "dy": -720, "duration": "320ms", "easing": "linear" },
+
+    {
+      "label": "Section 13: combined yaw left plus pitch down",
+      "type": "mousemove",
+      "at": "25400ms",
+      "dx": -1084,
+      "dy": 720,
+      "duration": "320ms",
+      "easing": "linear"
+    },
+    { "type": "mousemove", "at": "26000ms", "dx": -1084, "dy": 720, "duration": "320ms", "easing": "linear" },
+    { "type": "mousemove", "at": "26600ms", "dx": -1084, "dy": 720, "duration": "320ms", "easing": "linear" },
+
+    {
+      "label": "Section 14: move-only control",
+      "type": "holdkey",
+      "keys": ["w"],
+      "at": "28000ms",
+      "duration": "2000ms"
+    },
+
+    {
+      "label": "Section 15: move plus yaw control",
+      "type": "holdkey",
+      "keys": ["w"],
+      "at": "30500ms",
+      "duration": "2000ms"
+    },
+    { "type": "mousemove", "at": "30700ms", "dx": 2168, "dy": 0, "duration": "320ms", "easing": "linear" },
+    { "type": "mousemove", "at": "31700ms", "dx": 2168, "dy": 0, "duration": "320ms", "easing": "linear" }
+
+  ]
+}

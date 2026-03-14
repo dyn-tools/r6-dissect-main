@@ -1588,6 +1588,50 @@ func TestMovementDataY11AttachesRecoveredTailClock(t *testing.T) {
 	}
 }
 
+func TestMovementRotationHeadingHybridModelHandlesMixedSoloPackets(t *testing.T) {
+	var hybrid movementRotationHeadingModel
+	found := false
+	for _, model := range movementRotationHeadingModels() {
+		if model.name == "hybrid-z-or-implicit-default" {
+			hybrid = model
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected hybrid rotation heading model")
+	}
+	direct, ok := hybrid.decode(Vector3{X: 0, Y: 0, Z: float32(120 * math.Pi / 180)})
+	if !ok || math.Abs(direct-120) > 0.5 {
+		t.Fatalf("expected direct-radian decode near 120 degrees, got %f ok=%v", direct, ok)
+	}
+	quatLike, ok := hybrid.decode(Vector3{X: 0.29548135, Y: 0.18343286, Z: 0.75073767})
+	if !ok || math.Abs(quatLike-101.55) > 1.0 {
+		t.Fatalf("expected quaternion-like decode near 101.55 degrees, got %f ok=%v", quatLike, ok)
+	}
+}
+
+func TestMovementApplyDerivedViewingDirectionsKeepsGoodDerivedTimeline(t *testing.T) {
+	actorID := "solo"
+	track := MovementTrack{
+		ActorID: actorID,
+		Samples: []MovementSample{
+			{RotationDegrees: &Vector3{Z: -120}},
+			{RotationDegrees: &Vector3{Z: -40}},
+			{RotationDegrees: &Vector3{Z: 30}},
+			{RotationDegrees: &Vector3{Z: 100}},
+		},
+	}
+	derived := map[int]float64{0: -10, 1: 15, 2: 45, 3: 90}
+	ordered, _ := movementApplyDerivedViewingDirections([]MovementTrack{track}, []MovementTrack{{ActorID: actorID}}, movementDirectionSearchResult{derivedByActor: map[string]map[int]float64{actorID: derived}}, nil)
+	for index, want := range []float64{-10, 15, 45, 90} {
+		got := ordered[0].Samples[index].ViewingDirectionDegrees
+		if got == nil || math.Abs(*got-want) > 0.001 {
+			t.Fatalf("expected derived heading at index %d, got %+v want %f", index, got, want)
+		}
+	}
+}
+
 func movementY11PositionRecord(actor []byte, prop []byte, x, y, z float32) []byte {
 	rec := movementY11RecordBase(actor, prop)
 	binary.LittleEndian.PutUint32(rec[30:34], math.Float32bits(x))
@@ -1664,7 +1708,150 @@ func appendUint32(dst []byte, value uint32) []byte {
 	return append(dst, buf...)
 }
 
+func floatPtr(value float64) *float64 {
+	return &value
+}
+
 func float32Equal(a, b float32) bool {
 	const epsilon = 0.0001
 	return math.Abs(float64(a-b)) < epsilon
+}
+
+func TestMovementFoldPitchDegrees(t *testing.T) {
+	cases := []struct {
+		input float64
+		want  float64
+	}{
+		{0, 0},
+		{45, 45},
+		{120, 60},
+		{170, 10},
+		{-120, -60},
+		{-170, -10},
+	}
+	for _, tc := range cases {
+		got := movementFoldPitchDegrees(tc.input)
+		if math.Abs(got-tc.want) > 0.0001 {
+			t.Fatalf("fold(%f)=%f want %f", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestMovementGuessViewPitchAxisPrefersResponsiveAxis(t *testing.T) {
+	track := MovementTrack{
+		Samples: []MovementSample{
+			{RotationDegrees: &Vector3{X: 10, Y: 10, Z: 42}, ViewingDirectionDegrees: floatPtr(0)},
+			{RotationDegrees: &Vector3{X: 10, Y: 10, Z: 20}, ViewingDirectionDegrees: floatPtr(0)},
+			{RotationDegrees: &Vector3{X: 10, Y: 10, Z: -10}, ViewingDirectionDegrees: floatPtr(0), Position: &Vector3{X: 0}},
+			{RotationDegrees: &Vector3{X: 10, Y: 10, Z: -35}, ViewingDirectionDegrees: floatPtr(0), Position: &Vector3{X: 0}},
+			{RotationDegrees: &Vector3{X: 10, Y: 10, Z: 50}, ViewingDirectionDegrees: floatPtr(0), Position: &Vector3{X: 0}},
+			{RotationDegrees: &Vector3{X: 10, Y: 10, Z: 85}, ViewingDirectionDegrees: floatPtr(0), Position: &Vector3{X: 0}},
+			{RotationDegrees: &Vector3{X: 10, Y: 10, Z: 42}, ViewingDirectionDegrees: floatPtr(0)},
+			{RotationDegrees: &Vector3{X: 10, Y: 10, Z: 42}, ViewingDirectionDegrees: floatPtr(0)},
+		},
+	}
+
+	got := movementGuessViewPitchAxis(track)
+	if got != "z" {
+		t.Fatalf("expected z to win as pitch axis, got %q", got)
+	}
+}
+
+func TestMovementDirectionProjectedPitchTimelineScorePrefersPitchLikeSignal(t *testing.T) {
+	track := MovementTrack{Samples: make([]MovementSample, 10)}
+	yawTimeline := map[int]float64{
+		0: 0,
+		1: 12,
+		2: 24,
+		3: 24,
+		4: 24,
+		5: 24,
+		6: 24,
+		7: 24,
+		8: 24,
+		9: 24,
+	}
+	stationary := map[int]bool{
+		0: true,
+		1: true,
+		2: true,
+		3: true,
+		4: true,
+		5: true,
+		6: true,
+		7: true,
+		8: true,
+		9: true,
+	}
+	pitchLike := map[int]float64{
+		0: 0,
+		1: 0.4,
+		2: 0.8,
+		3: 8,
+		4: 16,
+		5: 24,
+		6: 32,
+		7: 40,
+		8: 48,
+		9: 56,
+	}
+	yawLeaky := map[int]float64{
+		0: 0,
+		1: 12,
+		2: 24,
+		3: 24.5,
+		4: 25,
+		5: 25.5,
+		6: 26,
+		7: 26.5,
+		8: 27,
+		9: 27.5,
+	}
+
+	pitchScore := movementDirectionProjectedPitchTimelineScore(track, yawTimeline, pitchLike, stationary)
+	leakyScore := movementDirectionProjectedPitchTimelineScore(track, yawTimeline, yawLeaky, stationary)
+	if pitchScore <= leakyScore {
+		t.Fatalf("expected pitch-like score %f to beat leaky score %f", pitchScore, leakyScore)
+	}
+}
+
+func TestMovementDirectionPitchAlignmentsForStreamIncludesTimedFallbacks(t *testing.T) {
+	stream := movementDirectionStream{
+		propID:  "prop",
+		actorID: "actor",
+		samples: []movementDirectionAngleSample{
+			{hasTime: true},
+			{hasTime: true},
+			{hasTime: true},
+			{hasTime: true},
+			{hasTime: true},
+			{hasTime: true},
+			{hasTime: true},
+			{hasTime: true},
+		},
+	}
+	bestDense := &MovementDirectionCandidate{
+		PropID:    "prop",
+		ActorID:   "actor",
+		Alignment: "progress",
+		ByteShift: 17,
+	}
+
+	alignments := movementDirectionPitchAlignmentsForStream(stream, bestDense, nil)
+	hasDense := false
+	hasTimed := false
+	for _, alignment := range alignments {
+		if alignment.Alignment == "progress" && alignment.ByteShift == 17 {
+			hasDense = true
+		}
+		if alignment.Alignment == "time" && alignment.TimeShiftMilliseconds == 0 {
+			hasTimed = true
+		}
+	}
+	if !hasDense {
+		t.Fatal("expected pitch search to keep best-dense alignment")
+	}
+	if !hasTimed {
+		t.Fatal("expected pitch search to include timed fallback alignment")
+	}
 }

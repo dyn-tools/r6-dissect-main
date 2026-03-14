@@ -1,0 +1,7 @@
+# import config
+packagefile os=D:\r6-dissect-main\.gocache\ad\adda065ea6f6f326deb7c0cc06a9c741ead09a0c131c7e8a64d5741114c3a025-d
+packagefile reflect=D:\r6-dissect-main\.gocache\7b\7b5fcd35aa5a93021fe547eb3ab6585c04690e666c70424d776c7d21778d153b-d
+packagefile testing=D:\r6-dissect-main\.gocache\53\53070bc2967548fb9add33408d299bafeb1699275e4067454634176382d515da-d
+packagefile testing/internal/testdeps=D:\r6-dissect-main\.gocache\e6\e63b2e1d2937b5af7598484b1707811d930fc95ab87dd48afc554c884f62d87d-d
+packagefile runtime=D:\r6-dissect-main\.gocache\d2\d218baa9c99eabbaa3006cf10e0c3cb41c0b10f4eab118352f3ef9976fe44c9c-d
+packagefile github.com/redraskal/r6-dissect/dissect=D:\r6-dissect-main\.gotmp\go-build3535403907\b099\_pkg_.a

@@ -1,0 +1,89 @@
+{
+  "mode": "timeline",
+  "meta": {
+    "purpose": "Standing still, pitch-only isolation replay",
+    "notes": [
+      "Run solo.",
+      "Do not touch mouse or keyboard outside the macro.",
+      "Stay standing still on flat ground."
+    ],
+    "pitchCalibration": {
+      "smallStepDots": 480,
+      "mediumStepDots": 960
+    }
+  },
+  "commands": [
+    {
+      "label": "Pitch up small",
+      "type": "mousemove",
+      "at": "2000ms",
+      "dx": 0,
+      "dy": -480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Pitch up small",
+      "type": "mousemove",
+      "at": "2800ms",
+      "dx": 0,
+      "dy": -480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Pitch up small",
+      "type": "mousemove",
+      "at": "3600ms",
+      "dx": 0,
+      "dy": -480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Pitch up small",
+      "type": "mousemove",
+      "at": "4400ms",
+      "dx": 0,
+      "dy": -480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Pitch down small",
+      "type": "mousemove",
+      "at": "6200ms",
+      "dx": 0,
+      "dy": 480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Pitch down small",
+      "type": "mousemove",
+      "at": "7000ms",
+      "dx": 0,
+      "dy": 480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Pitch down small",
+      "type": "mousemove",
+      "at": "7800ms",
+      "dx": 0,
+      "dy": 480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Pitch down small",
+      "type": "mousemove",
+      "at": "8600ms",
+      "dx": 0,
+      "dy": 480,
+      "duration": "260ms",
+      "easing": "linear"
+    }
+  ]
+}

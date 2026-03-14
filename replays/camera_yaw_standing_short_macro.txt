@@ -1,0 +1,92 @@
+{
+  "mode": "timeline",
+  "meta": {
+    "purpose": "Standing still, yaw-only isolation replay",
+    "notes": [
+      "Run solo.",
+      "Do not touch mouse or keyboard outside the macro.",
+      "Stay standing still on flat ground."
+    ],
+    "yawCalibration": {
+      "full360DotsSigned": 8670,
+      "full360Dots": 8670,
+      "half180Dots": 4335,
+      "quarter90Dots": 2168,
+      "eighth45Dots": 1084
+    }
+  },
+  "commands": [
+    {
+      "label": "Yaw right 45",
+      "type": "mousemove",
+      "at": "2000ms",
+      "dx": 1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Yaw right 45",
+      "type": "mousemove",
+      "at": "2800ms",
+      "dx": 1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Yaw right 45",
+      "type": "mousemove",
+      "at": "3600ms",
+      "dx": 1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Yaw right 45",
+      "type": "mousemove",
+      "at": "4400ms",
+      "dx": 1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Yaw left 45",
+      "type": "mousemove",
+      "at": "6200ms",
+      "dx": -1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Yaw left 45",
+      "type": "mousemove",
+      "at": "7000ms",
+      "dx": -1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Yaw left 45",
+      "type": "mousemove",
+      "at": "7800ms",
+      "dx": -1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Yaw left 45",
+      "type": "mousemove",
+      "at": "8600ms",
+      "dx": -1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    }
+  ]
+}

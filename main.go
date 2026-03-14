@@ -64,7 +64,7 @@ func main() {
 		log.Fatal().Msg("blender-camera requires a replay file input.")
 	}
 	if viper.GetBool("blender-camera") {
-		if err := writeRoundBlenderCamera(in, out); err != nil {
+		if err := writeRoundBlenderCamera(viper.GetString("input"), in, out); err != nil {
 			log.Fatal().Err(err).Send()
 		}
 		return
@@ -76,7 +76,7 @@ func main() {
 			}
 			return
 		}
-		if err := writeRoundMovement(in, out); err != nil {
+		if err := writeRoundMovement(viper.GetString("input"), in, out); err != nil {
 			log.Fatal().Err(err).Send()
 		}
 		return
@@ -132,6 +132,8 @@ func setup() {
 	pflag.Float64("camera-yaw-offset-deg", 0, "adds a constant yaw offset in degrees to the exported Blender camera")
 	pflag.Float64("camera-pitch-offset-deg", 0, "adds a constant pitch offset in degrees to the exported Blender camera")
 	pflag.Float64("camera-roll-offset-deg", 0, "adds a constant roll offset in degrees to the exported Blender camera")
+	pflag.Bool("camera-compare-candidates", false, "exports alternate Blender camera rigs for macro-derived yaw/pitch candidate families")
+	pflag.Int("camera-candidate-limit", 3, "sets the maximum number of alternate yaw and pitch candidate rigs to export in compare mode")
 	pflag.BoolP("version", "v", false, "prints the version")
 	pflag.Parse()
 	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
@@ -233,12 +235,12 @@ func writeRound(in io.Reader, out io.Writer) error {
 	})
 }
 
-func writeRoundMovement(in io.Reader, out io.Writer) error {
+func writeRoundMovement(inputPath string, in io.Reader, out io.Writer) error {
 	r, err := dissect.NewReader(in)
 	if err != nil {
 		return err
 	}
-	data, err := r.MovementDataWithPlayersOptions(movementOptionsFromFlags())
+	data, err := r.MovementDataWithPlayersOptions(movementOptionsForInput(inputPath))
 	if err != nil {
 		return err
 	}
@@ -355,7 +357,7 @@ func writeReplayMovementFile(inputPath string, outputPath string) error {
 			_ = os.Remove(tempPath)
 		}
 	}()
-	if err := writeRoundMovement(in, out); err != nil {
+	if err := writeRoundMovement(inputPath, in, out); err != nil {
 		return err
 	}
 	if err := out.Close(); err != nil {
@@ -387,12 +389,12 @@ func writeRoundMovementProbe(in io.Reader, out io.Writer) error {
 	return encoder.Encode(data)
 }
 
-func writeRoundBlenderCamera(in io.Reader, out io.Writer) error {
+func writeRoundBlenderCamera(inputPath string, in io.Reader, out io.Writer) error {
 	r, err := dissect.NewReader(in)
 	if err != nil {
 		return err
 	}
-	script, err := r.BlenderCameraScriptOptions(blenderCameraOptionsFromFlags())
+	script, err := r.BlenderCameraScriptOptions(blenderCameraOptionsForInput(inputPath))
 	if err != nil {
 		return err
 	}
@@ -400,32 +402,43 @@ func writeRoundBlenderCamera(in io.Reader, out io.Writer) error {
 	return err
 }
 
-func movementOptionsFromFlags() dissect.MovementOptions {
+func movementOptionsForInput(inputPath string) dissect.MovementOptions {
 	return dissect.MovementOptions{
 		PositionPropID: viper.GetString("position-prop"),
 		RotationPropID: viper.GetString("rotation-prop"),
+		SourcePath:     inputPath,
+	}
+}
+
+func movementOptionsFromFlags() dissect.MovementOptions {
+	return movementOptionsForInput(viper.GetString("input"))
+}
+
+func blenderCameraOptionsForInput(inputPath string) dissect.BlenderCameraOptions {
+	return dissect.BlenderCameraOptions{
+		MovementOptions:   movementOptionsForInput(inputPath),
+		Track:             viper.GetString("camera-track"),
+		FPS:               viper.GetInt("camera-fps"),
+		FrameStep:         viper.GetInt("camera-frame-step"),
+		Scale:             viper.GetFloat64("camera-scale"),
+		RotationMode:      viper.GetString("camera-rotation-mode"),
+		YawAxis:           viper.GetString("camera-yaw-axis"),
+		PitchAxis:         viper.GetString("camera-pitch-axis"),
+		RollAxis:          viper.GetString("camera-roll-axis"),
+		YawSign:           viper.GetFloat64("camera-yaw-sign"),
+		PitchSign:         viper.GetFloat64("camera-pitch-sign"),
+		RollSign:          viper.GetFloat64("camera-roll-sign"),
+		LevelCamera:       viper.GetBool("camera-level"),
+		YawOffsetDeg:      viper.GetFloat64("camera-yaw-offset-deg"),
+		PitchOffsetDeg:    viper.GetFloat64("camera-pitch-offset-deg"),
+		RollOffsetDeg:     viper.GetFloat64("camera-roll-offset-deg"),
+		CompareCandidates: viper.GetBool("camera-compare-candidates"),
+		CandidateLimit:    viper.GetInt("camera-candidate-limit"),
 	}
 }
 
 func blenderCameraOptionsFromFlags() dissect.BlenderCameraOptions {
-	return dissect.BlenderCameraOptions{
-		MovementOptions: movementOptionsFromFlags(),
-		Track:           viper.GetString("camera-track"),
-		FPS:             viper.GetInt("camera-fps"),
-		FrameStep:       viper.GetInt("camera-frame-step"),
-		Scale:           viper.GetFloat64("camera-scale"),
-		RotationMode:    viper.GetString("camera-rotation-mode"),
-		YawAxis:         viper.GetString("camera-yaw-axis"),
-		PitchAxis:       viper.GetString("camera-pitch-axis"),
-		RollAxis:        viper.GetString("camera-roll-axis"),
-		YawSign:         viper.GetFloat64("camera-yaw-sign"),
-		PitchSign:       viper.GetFloat64("camera-pitch-sign"),
-		RollSign:        viper.GetFloat64("camera-roll-sign"),
-		LevelCamera:     viper.GetBool("camera-level"),
-		YawOffsetDeg:    viper.GetFloat64("camera-yaw-offset-deg"),
-		PitchOffsetDeg:  viper.GetFloat64("camera-pitch-offset-deg"),
-		RollOffsetDeg:   viper.GetFloat64("camera-roll-offset-deg"),
-	}
+	return blenderCameraOptionsForInput(viper.GetString("input"))
 }
 
 func writeRoundDump(in io.Reader, out *os.File) error {

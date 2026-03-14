@@ -134,6 +134,7 @@ type movementDirectionSearchResult struct {
 	summary             *MovementDirectionSearch
 	derivedByActor      map[string]map[int]float64
 	timelineByActor     map[string]map[int]float64
+	pitchTimelineByActor map[string]map[int]float64
 	supplementalPackets map[string]bool
 	supplementalActors  map[string]bool
 }
@@ -347,6 +348,14 @@ func movementDirectionSearchWithDerived(header Header, buf []byte, start int, ze
 	if timeline, ok := movementDirectionBestProjectedTimeline(base, candidates, evals, bestFused, bestSameActor); ok {
 		timelineByActor[base.ActorID] = timeline
 	}
+	pitchTimelineByActor := map[string]map[int]float64{}
+	if len(header.Players) == 1 {
+		if yawTimeline, ok := timelineByActor[base.ActorID]; ok && bestDense != nil {
+			if pitchTimeline, ok := movementDirectionBestProjectedPitchTimeline(base, inspectionStreams, bestDense, bestSameActor, yawTimeline); ok {
+				pitchTimelineByActor[base.ActorID] = pitchTimeline
+			}
+		}
+	}
 	return movementDirectionSearchResult{
 		summary: &MovementDirectionSearch{
 			TrackActorID:           base.ActorID,
@@ -359,10 +368,11 @@ func movementDirectionSearchWithDerived(header Header, buf []byte, start int, ze
 			SameActorPropProbe:     sameActorProbe,
 			Candidates:             candidates,
 		},
-		derivedByActor:      map[string]map[int]float64{base.ActorID: derived},
-		timelineByActor:     timelineByActor,
-		supplementalPackets: supplementalPackets,
-		supplementalActors:  supplementalActors,
+		derivedByActor:       map[string]map[int]float64{base.ActorID: derived},
+		timelineByActor:      timelineByActor,
+		pitchTimelineByActor: pitchTimelineByActor,
+		supplementalPackets:  supplementalPackets,
+		supplementalActors:   supplementalActors,
 	}
 }
 
@@ -406,6 +416,50 @@ func movementDirectionProjectCandidateTimeline(track MovementTrack, evals []move
 				continue
 			}
 			out[sampleIndex] = movementWrapDegrees((angle * candidate.AngleScale) + candidate.HeadingOffsetDegrees)
+		}
+	}
+	if movementPercent(len(out), len(track.Samples)) < 10 {
+		return nil, false
+	}
+	return out, true
+}
+
+func movementDirectionProjectStreamTimelineWithAlignment(track MovementTrack, stream movementDirectionStream, alignment MovementDirectionCandidate, transform func(float64) float64) (map[int]float64, bool) {
+	unwrapped := movementUnwrapAngleSamples(stream.samples)
+	if len(unwrapped) == 0 || len(track.Samples) == 0 {
+		return nil, false
+	}
+	out := map[int]float64{}
+	switch alignment.Alignment {
+	case "time":
+		for sampleIndex, sample := range track.Samples {
+			if sample.TimeInSeconds == nil {
+				continue
+			}
+			milliseconds := int(math.Round(*sample.TimeInSeconds * 1000))
+			angle, ok := movementInterpolatedAngleAtMilliseconds(unwrapped, milliseconds+alignment.TimeShiftMilliseconds, 1200)
+			if !ok {
+				continue
+			}
+			out[sampleIndex] = transform(angle)
+		}
+	case "progress":
+		denom := maxInt(len(track.Samples)-1, 1)
+		progress := progressShift(alignment.ByteShift, len(track.Samples), len(unwrapped))
+		for sampleIndex := range track.Samples {
+			angle, ok := movementInterpolatedAngleAtProgress(unwrapped, (float64(sampleIndex)/float64(denom))+progress)
+			if !ok {
+				continue
+			}
+			out[sampleIndex] = transform(angle)
+		}
+	default:
+		for sampleIndex, sample := range track.Samples {
+			angle, ok := movementInterpolatedAngleAtOffset(unwrapped, sample.Offset+alignment.ByteShift, 32768)
+			if !ok {
+				continue
+			}
+			out[sampleIndex] = transform(angle)
 		}
 	}
 	if movementPercent(len(out), len(track.Samples)) < 10 {
@@ -503,18 +557,25 @@ func movementDirectionBestProjectedTimeline(track MovementTrack, candidates []Mo
 	bestTimeline := map[int]float64(nil)
 	bestScore := -1.0
 	seen := map[string]bool{}
+	stationary := movementTrackStationarySampleIndexes(track)
+	anchorTimeline := map[int]float64(nil)
+	if sameActor != nil && sameActor.MakesSense {
+		if timeline, ok := movementDirectionProjectCandidateTimeline(track, evals, *sameActor); ok {
+			anchorTimeline = timeline
+		}
+	}
 	if timeline, ok := movementDirectionProjectFusedTimeline(track, evals, fused); ok {
-		score := movementDirectionProjectedTimelineScore(track, timeline, nil)
+		score := movementDirectionProjectedTimelineScore(track, timeline, nil, stationary, anchorTimeline)
 		if score > bestScore {
 			bestTimeline = timeline
 			bestScore = score
 		}
 	}
 	if sameActor != nil && sameActor.MakesSense {
-		if timeline, ok := movementDirectionProjectCandidateTimeline(track, evals, *sameActor); ok {
-			score := movementDirectionProjectedTimelineScore(track, timeline, sameActor)
+		if anchorTimeline != nil {
+			score := movementDirectionProjectedTimelineScore(track, anchorTimeline, sameActor, stationary, anchorTimeline)
 			if score > bestScore {
-				bestTimeline = timeline
+				bestTimeline = anchorTimeline
 				bestScore = score
 			}
 		}
@@ -539,14 +600,14 @@ func movementDirectionBestProjectedTimeline(track MovementTrack, candidates []Mo
 		if !ok {
 			continue
 		}
-		score := movementDirectionProjectedTimelineScore(track, timeline, &candidate)
+		score := movementDirectionProjectedTimelineScore(track, timeline, &candidate, stationary, anchorTimeline)
 		if score > bestScore {
 			bestTimeline = timeline
 			bestScore = score
 		}
 	}
 	if timeline, ok := movementDirectionProjectImplicitQuaternionTimeline(track); ok {
-		score := movementDirectionProjectedTimelineScore(track, timeline, nil) + 12
+		score := movementDirectionProjectedTimelineScore(track, timeline, nil, stationary, anchorTimeline) + 12
 		if score > bestScore {
 			bestTimeline = timeline
 			bestScore = score
@@ -556,6 +617,189 @@ func movementDirectionBestProjectedTimeline(track MovementTrack, candidates []Mo
 		return nil, false
 	}
 	return bestTimeline, true
+}
+
+func movementDirectionBestProjectedPitchTimeline(track MovementTrack, streams []movementDirectionStream, bestDense *MovementDirectionCandidate, bestSameActor *MovementDirectionCandidate, yawTimeline map[int]float64) (map[int]float64, bool) {
+	if len(track.Samples) == 0 || len(streams) == 0 || bestDense == nil || len(yawTimeline) == 0 {
+		return nil, false
+	}
+	stationary := movementTrackStationarySampleIndexes(track)
+	bestScore := -1.0
+	var bestTimeline map[int]float64
+	for _, stream := range streams {
+		if !movementDirectionPitchStreamAllowed(stream) {
+			continue
+		}
+		alignments := movementDirectionPitchAlignmentsForStream(stream, bestDense, bestSameActor)
+		for _, alignment := range alignments {
+			for _, variant := range movementDirectionPitchTransforms() {
+				timeline, ok := movementDirectionProjectStreamTimelineWithAlignment(track, stream, alignment, variant)
+				if !ok {
+					continue
+				}
+				score := movementDirectionProjectedPitchTimelineScore(track, yawTimeline, timeline, stationary)
+				if score > bestScore {
+					bestScore = score
+					bestTimeline = timeline
+				}
+			}
+		}
+	}
+	if bestTimeline == nil || bestScore < 0.15 {
+		return nil, false
+	}
+	return bestTimeline, true
+}
+
+func movementDirectionPitchAlignmentsForStream(stream movementDirectionStream, bestDense *MovementDirectionCandidate, bestSameActor *MovementDirectionCandidate) []MovementDirectionCandidate {
+	alignments := []MovementDirectionCandidate{}
+	add := func(candidate MovementDirectionCandidate) {
+		for _, existing := range alignments {
+			if existing.Alignment == candidate.Alignment &&
+				existing.ByteShift == candidate.ByteShift &&
+				existing.TimeShiftMilliseconds == candidate.TimeShiftMilliseconds &&
+				existing.PropID == candidate.PropID &&
+				existing.ActorID == candidate.ActorID {
+				return
+			}
+		}
+		alignments = append(alignments, candidate)
+	}
+	if bestDense != nil && bestDense.PropID == stream.propID {
+		if bestDense.ActorID == stream.actorID || bestDense.ActorID == "fused" || stream.actorID == "fused" {
+			add(*bestDense)
+		}
+	}
+	if bestSameActor != nil && bestSameActor.PropID == stream.propID {
+		if bestSameActor.ActorID == stream.actorID || bestSameActor.ActorID == "fused" || stream.actorID == "fused" {
+			add(*bestSameActor)
+		}
+	}
+	if movementDirectionTimedSampleCount(stream.samples) >= 8 {
+		for _, shift := range []int{-140, -105, -70, -35, 0, 35, 70, 105, 140} {
+			add(MovementDirectionCandidate{
+				PropID:                stream.propID,
+				ActorID:               stream.actorID,
+				Alignment:             "time",
+				TimeShiftMilliseconds: shift,
+			})
+		}
+	}
+	for _, shift := range []int{-32, 0, 32} {
+		add(MovementDirectionCandidate{
+			PropID:    stream.propID,
+			ActorID:   stream.actorID,
+			Alignment: "progress",
+			ByteShift: shift,
+		})
+	}
+	for _, shift := range []int{-16384, 0, 16384} {
+		add(MovementDirectionCandidate{
+			PropID:    stream.propID,
+			ActorID:   stream.actorID,
+			Alignment: "offset",
+			ByteShift: shift,
+		})
+	}
+	return alignments
+}
+
+func movementDirectionPitchStreamAllowed(stream movementDirectionStream) bool {
+	if strings.Contains(stream.source, "target-pos") || strings.Contains(stream.source, "vector-xy") || strings.Contains(stream.source, "vector-neg-xy") {
+		return false
+	}
+	return strings.Contains(stream.source, "late-") || strings.Contains(stream.source, "quat")
+}
+
+func movementDirectionTimedSampleCount(samples []movementDirectionAngleSample) int {
+	count := 0
+	for _, sample := range samples {
+		if sample.hasTime {
+			count++
+		}
+	}
+	return count
+}
+
+func movementDirectionPitchTransforms() []func(float64) float64 {
+	return []func(float64) float64{
+		func(angle float64) float64 { return movementFoldPitchDegrees(angle) },
+		func(angle float64) float64 { return movementFoldPitchDegrees(-angle) },
+		func(angle float64) float64 { return movementFoldPitchDegrees(movementWrapDegrees(angle + 90)) },
+		func(angle float64) float64 { return movementFoldPitchDegrees(movementWrapDegrees(angle - 90)) },
+	}
+}
+
+func movementDirectionProjectedPitchTimelineScore(track MovementTrack, yawTimeline map[int]float64, pitchTimeline map[int]float64, stationary map[int]bool) float64 {
+	if len(track.Samples) < 2 || len(yawTimeline) == 0 || len(pitchTimeline) == 0 {
+		return -1
+	}
+	coverage := movementPercent(len(pitchTimeline), len(track.Samples))
+	if coverage < 10 {
+		return -1
+	}
+	coveredPairs := 0
+	yawStableReward := 0.0
+	yawLeakPenalty := 0.0
+	pitchSignalReward := 0.0
+	minPitch := 0.0
+	maxPitch := 0.0
+	hasPitch := false
+	for sampleIndex := 0; sampleIndex+1 < len(track.Samples); sampleIndex++ {
+		if !stationary[sampleIndex] && !stationary[sampleIndex+1] {
+			continue
+		}
+		yawA, okYawA := yawTimeline[sampleIndex]
+		yawB, okYawB := yawTimeline[sampleIndex+1]
+		pitchA, okPitchA := pitchTimeline[sampleIndex]
+		pitchB, okPitchB := pitchTimeline[sampleIndex+1]
+		if !okYawA || !okYawB || !okPitchA || !okPitchB {
+			continue
+		}
+		if !hasPitch {
+			minPitch = pitchA
+			maxPitch = pitchA
+			hasPitch = true
+		}
+		if pitchA < minPitch {
+			minPitch = pitchA
+		}
+		if pitchA > maxPitch {
+			maxPitch = pitchA
+		}
+		if pitchB < minPitch {
+			minPitch = pitchB
+		}
+		if pitchB > maxPitch {
+			maxPitch = pitchB
+		}
+		yawDelta := math.Abs(movementWrapDegrees(yawB - yawA))
+		pitchDelta := math.Abs(pitchB - pitchA)
+		coveredPairs++
+		switch {
+		case yawDelta >= 8 && pitchDelta <= 1.5:
+			yawStableReward += 1.5
+		case yawDelta >= 8 && pitchDelta >= 4:
+			yawLeakPenalty += 2
+		case yawDelta <= 2 && pitchDelta >= 3:
+			pitchSignalReward += 1.25
+		case yawDelta <= 2 && pitchDelta >= 1:
+			pitchSignalReward += 0.25
+		}
+	}
+	if coveredPairs < 8 || !hasPitch {
+		return -1
+	}
+	pitchSpan := maxPitch - minPitch
+	score := coverage / 100
+	score += yawStableReward / float64(coveredPairs)
+	score += pitchSignalReward / float64(coveredPairs)
+	score -= yawLeakPenalty / float64(coveredPairs)
+	score += math.Min(pitchSpan, 120) / 240
+	if pitchSpan < 8 {
+		score -= 0.5
+	}
+	return score
 }
 
 func movementDirectionProjectImplicitQuaternionTimeline(track MovementTrack) (map[int]float64, bool) {
@@ -589,7 +833,7 @@ func movementDirectionProjectImplicitQuaternionTimeline(track MovementTrack) (ma
 	return out, true
 }
 
-func movementDirectionProjectedTimelineScore(track MovementTrack, timeline map[int]float64, candidate *MovementDirectionCandidate) float64 {
+func movementDirectionProjectedTimelineScore(track MovementTrack, timeline map[int]float64, candidate *MovementDirectionCandidate, stationary map[int]bool, anchorTimeline map[int]float64) float64 {
 	if len(track.Samples) == 0 || len(timeline) == 0 {
 		return -1
 	}
@@ -656,7 +900,146 @@ func movementDirectionProjectedTimelineScore(track MovementTrack, timeline map[i
 	if changes < 16 {
 		score -= 20
 	}
+	stationaryCoverage, stationarySpan, stationaryChanges := movementDirectionStationaryTimelineMetrics(track, timeline, stationary)
+	score += stationaryCoverage * 5
+	score += math.Min(stationarySpan, 1440) / 8
+	score += math.Min(float64(stationaryChanges), float64(len(track.Samples))) / 2
+	if stationaryCoverage < 10 {
+		score -= 35
+	}
+	if stationarySpan < 60 {
+		score -= 25
+	}
+	if stationaryChanges < 12 {
+		score -= 20
+	}
+	if overlap, meanError, meanCosine := movementDirectionTimelineOverlapMetrics(timeline, anchorTimeline); overlap >= 8 {
+		score += meanCosine * 80
+		score -= meanError / 4
+		if overlap >= 24 {
+			score += 15
+		}
+	} else if anchorTimeline != nil {
+		score -= 10
+	}
 	return score
+}
+
+func movementTrackStationarySampleIndexes(track MovementTrack) map[int]bool {
+	if len(track.Samples) < 2 {
+		return nil
+	}
+	stationary := map[int]bool{}
+	var previousPosition *Vector3
+	var previousTime *float64
+	var previousIndex int
+	for sampleIndex, sample := range track.Samples {
+		if sample.Position == nil {
+			continue
+		}
+		if previousPosition != nil {
+			dx := float64(sample.Position.X - previousPosition.X)
+			dy := float64(sample.Position.Y - previousPosition.Y)
+			distance := math.Hypot(dx, dy)
+			isStationary := false
+			if sample.TimeInSeconds != nil && previousTime != nil {
+				deltaTime := math.Abs(*sample.TimeInSeconds - *previousTime)
+				if deltaTime > 0 && distance/deltaTime < 0.15 {
+					isStationary = true
+				}
+			} else if distance < 0.015 {
+				isStationary = true
+			}
+			if isStationary {
+				stationary[previousIndex] = true
+				stationary[sampleIndex] = true
+			}
+		}
+		position := *sample.Position
+		previousPosition = &position
+		if sample.TimeInSeconds != nil {
+			timeValue := *sample.TimeInSeconds
+			previousTime = &timeValue
+		} else {
+			previousTime = nil
+		}
+		previousIndex = sampleIndex
+	}
+	return stationary
+}
+
+func movementDirectionStationaryTimelineMetrics(track MovementTrack, timeline map[int]float64, stationary map[int]bool) (float64, float64, int) {
+	if len(stationary) == 0 || len(timeline) == 0 {
+		return 0, 0, 0
+	}
+	sequence := make([]float64, 0, len(stationary))
+	covered := 0
+	changes := 0
+	hasPrevious := false
+	previous := 0.0
+	for sampleIndex := range track.Samples {
+		if !stationary[sampleIndex] {
+			continue
+		}
+		angle, ok := timeline[sampleIndex]
+		if !ok {
+			continue
+		}
+		covered++
+		sequence = append(sequence, angle)
+		if !hasPrevious {
+			previous = angle
+			hasPrevious = true
+			continue
+		}
+		current := angle
+		for current-previous > 180 {
+			current -= 360
+		}
+		for current-previous < -180 {
+			current += 360
+		}
+		if math.Abs(current-previous) >= 1 {
+			changes++
+		}
+		previous = current
+	}
+	return movementPercent(covered, len(stationary)), movementHeadingSequenceSpan(sequence), changes
+}
+
+func movementDirectionTimelineOverlapMetrics(timeline map[int]float64, anchor map[int]float64) (int, float64, float64) {
+	if len(timeline) == 0 || len(anchor) == 0 {
+		return 0, 0, 0
+	}
+	differences := make([]float64, 0, minInt(len(timeline), len(anchor)))
+	for sampleIndex, angle := range timeline {
+		anchorAngle, ok := anchor[sampleIndex]
+		if !ok {
+			continue
+		}
+		differences = append(differences, movementWrapDegrees(anchorAngle-angle))
+	}
+	if len(differences) == 0 {
+		return 0, 0, 0
+	}
+	offset := circularMeanDegrees(differences)
+	sumError := 0.0
+	sumCosine := 0.0
+	count := 0
+	for sampleIndex, angle := range timeline {
+		anchorAngle, ok := anchor[sampleIndex]
+		if !ok {
+			continue
+		}
+		errorDegrees := math.Abs(movementWrapDegrees(anchorAngle - (angle + offset)))
+		sumError += errorDegrees
+		sumCosine += math.Cos(errorDegrees * math.Pi / 180)
+		count++
+	}
+	if count == 0 {
+		return 0, 0, 0
+	}
+	return count, sumError / float64(count), sumCosine / float64(count)
 }
 
 func movementTrackAngleSamples(track MovementTrack) []movementDirectionAngleSample {
@@ -1103,6 +1486,110 @@ func movementDirectionForwardAxes() []struct {
 func movementQuaternionForwardAngle(quat movementQuaternion, axis Vector3) float64 {
 	world := movementRotateVector(quat, axis)
 	return math.Atan2(float64(world.Y), float64(world.X)) * 180 / math.Pi
+}
+
+func movementQuaternionForwardPitchAngle(quat movementQuaternion, axis Vector3) float64 {
+	world := movementRotateVector(quat, axis)
+	return math.Atan2(float64(world.Z), math.Hypot(float64(world.X), float64(world.Y))) * 180 / math.Pi
+}
+
+func movementDirectionQuaternionPitchStreams(header Header, buf []byte, start int, zeroActorPrefixes map[string]int, allowedProps map[string]bool, clockEntries []movementClockEntry) []movementDirectionStream {
+	minSamples := movementDirectionMinSampleCount(header)
+	type streamKey struct {
+		source  string
+		propID  string
+		actorID string
+		offset  int
+		model   string
+		forward string
+	}
+	streams := map[streamKey][]movementDirectionAngleSample{}
+	models := movementImplicitQuaternionModels()
+	windowModels := make([]movementImplicitQuaternionModel, 0, len(models))
+	for _, model := range models {
+		if model.mode == "implicit_w" {
+			windowModels = append(windowModels, model)
+		}
+	}
+	for i := start; i < len(buf); i++ {
+		candidate, ok := movementCandidateRecordAtCodeVersion(header.CodeVersion, buf, i, zeroActorPrefixes)
+		if !ok || !movementPropPatternAllowed(header.CodeVersion, candidate.prop) {
+			continue
+		}
+		if header.CodeVersion >= Y11S1Alpha3 && movementY11CandidateIsPosition(candidate) {
+			continue
+		}
+		propID := hex.EncodeToString(candidate.prop)
+		if len(allowedProps) > 0 && !allowedProps[propID] {
+			continue
+		}
+		actorID := hex.EncodeToString(candidate.actor)
+		if candidate.hasQuaternion {
+			for _, forward := range movementDirectionForwardAxes() {
+				angle := movementQuaternionForwardPitchAngle(candidate.quaternion, forward.axis)
+				key := streamKey{source: "quat-22-pitch", propID: propID, actorID: actorID, offset: 22, model: "xyzw", forward: forward.name}
+				streams[key] = append(streams[key], movementDirectionAngleSampleAtOffset(i, angle, clockEntries))
+			}
+		}
+		if candidate.hasSecondary && movementVectorLooksImplicitQuaternionXYZ(candidate.secondary) && movementVectorLooksZeroLike(candidate.primary, 0.1) {
+			for _, model := range models {
+				quat, ok := movementY11CandidateQuaternionWithModel(candidate, model)
+				if !ok {
+					continue
+				}
+				modelKey := movementImplicitQuaternionModelKey(model)
+				for _, forward := range movementDirectionForwardAxes() {
+					angle := movementQuaternionForwardPitchAngle(quat, forward.axis)
+					key := streamKey{source: "quat-secondary-pitch", propID: propID, actorID: actorID, offset: 31, model: modelKey, forward: forward.name}
+					streams[key] = append(streams[key], movementDirectionAngleSampleAtOffset(i, angle, clockEntries))
+				}
+			}
+		}
+		for rel := 22; rel <= 31; rel++ {
+			value, ok := movementVectorAt(buf, i+rel)
+			if !ok || !movementVectorLooksImplicitQuaternionXYZ(value) {
+				continue
+			}
+			windowCandidate := movementCandidate{
+				primary:      Vector3{},
+				secondary:    value,
+				hasSecondary: true,
+			}
+			for _, model := range windowModels {
+				quat, ok := movementY11CandidateQuaternionWithModel(windowCandidate, model)
+				if !ok {
+					continue
+				}
+				modelKey := movementImplicitQuaternionModelKey(model)
+				for _, forward := range movementDirectionForwardAxes() {
+					angle := movementQuaternionForwardPitchAngle(quat, forward.axis)
+					key := streamKey{source: "quat-window-pitch", propID: propID, actorID: actorID, offset: rel, model: modelKey, forward: forward.name}
+					streams[key] = append(streams[key], movementDirectionAngleSampleAtOffset(i, angle, clockEntries))
+				}
+			}
+		}
+		if header.CodeVersion < Y11S1Alpha3 {
+			i += 37
+		}
+	}
+	out := make([]movementDirectionStream, 0, len(streams))
+	for key, samples := range streams {
+		if len(samples) < minSamples {
+			continue
+		}
+		out = append(out, movementDirectionStream{
+			source:       key.source + ":" + key.model,
+			propID:       key.propID,
+			actorID:      key.actorID,
+			vectorOffset: key.offset,
+			axisA:        key.forward,
+			samples:      samples,
+		})
+	}
+	if len(header.Players) == 1 {
+		return movementDirectionFinalizeSoloScalarStreams(out, minSamples)
+	}
+	return out
 }
 
 func movementDirectionInt16Streams(header Header, buf []byte, start int, zeroActorPrefixes map[string]int, allowedProps map[string]bool, clockEntries []movementClockEntry) []movementDirectionStream {
@@ -3171,6 +3658,9 @@ func movementDirectionCandidateByProgress(movementSamples []movementDirectionAng
 }
 
 func movementDirectionCandidateByTime(movementSamples []movementDirectionAngleSample, stream movementDirectionStream, unwrapped []movementDirectionAngleSample, minSamples int) (MovementDirectionCandidate, bool) {
+	if !movementDirectionTimeSeriesLooksUsable(unwrapped) {
+		return MovementDirectionCandidate{}, false
+	}
 	best := MovementDirectionCandidate{}
 	bestMetric := math.Inf(-1)
 	for _, step := range []int{1200, 300, 80, 20, 5} {
@@ -3196,6 +3686,46 @@ func movementDirectionCandidateByTime(movementSamples []movementDirectionAngleSa
 		return MovementDirectionCandidate{}, false
 	}
 	return best, true
+}
+
+func movementDirectionTimeSeriesLooksUsable(samples []movementDirectionAngleSample) bool {
+	if len(samples) < 8 {
+		return false
+	}
+	distinct := map[int]bool{}
+	minMilliseconds := 0
+	maxMilliseconds := 0
+	hasTime := false
+	for _, sample := range samples {
+		if !sample.hasTime {
+			continue
+		}
+		distinct[sample.milliseconds] = true
+		if !hasTime {
+			minMilliseconds = sample.milliseconds
+			maxMilliseconds = sample.milliseconds
+			hasTime = true
+			continue
+		}
+		if sample.milliseconds < minMilliseconds {
+			minMilliseconds = sample.milliseconds
+		}
+		if sample.milliseconds > maxMilliseconds {
+			maxMilliseconds = sample.milliseconds
+		}
+	}
+	if !hasTime {
+		return false
+	}
+	distinctCount := len(distinct)
+	span := maxMilliseconds - minMilliseconds
+	if distinctCount < maxInt(8, len(samples)/16) {
+		return false
+	}
+	if len(samples) >= 64 && span < 250 {
+		return false
+	}
+	return true
 }
 
 func movementDirectionCandidateAtProgressShift(movementSamples []movementDirectionAngleSample, stream movementDirectionStream, unwrapped []movementDirectionAngleSample, shift float64, minSamples int) (MovementDirectionCandidate, float64, bool) {

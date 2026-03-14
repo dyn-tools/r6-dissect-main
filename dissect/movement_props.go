@@ -15,6 +15,7 @@ const movementRotationAbs95Max = 720
 type MovementOptions struct {
 	PositionPropID string
 	RotationPropID string
+	SourcePath     string
 }
 
 type MovementPropCandidate struct {
