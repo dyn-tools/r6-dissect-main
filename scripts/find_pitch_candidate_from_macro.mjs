@@ -34,7 +34,7 @@ function parseMs(value) {
 }
 
 function normalizeCommands(commands) {
-  return commands.map((command, index) => {
+  const normalized = commands.map((command, index) => {
     const startMs = parseMs(command.at ?? 0);
     const durationMs = parseMs(command.duration ?? 0);
     const dx = Number(command.dx ?? 0);
@@ -55,6 +55,13 @@ function normalizeCommands(commands) {
       keys,
     };
   });
+  const movementIntervals = normalized
+    .filter((command) => command.keys.some((key) => ["w", "a", "s", "d", "shift", "ctrl", "space"].includes(String(key).toLowerCase())))
+    .map((command) => ({ startMs: command.startMs, endMs: command.endMs }));
+  return normalized.map((command) => ({
+    ...command,
+    movementActive: movementIntervals.some((interval) => !(interval.endMs < command.startMs || interval.startMs > command.endMs)),
+  }));
 }
 
 function sampleElapsedMs(sample) {
@@ -109,8 +116,8 @@ function average(values) {
 }
 
 const commands = normalizeCommands(macro.commands);
-const yawOnly = commands.filter((command) => command.dx !== 0 && command.dy === 0 && command.keys.length === 0);
-const pitchOnly = commands.filter((command) => command.dy !== 0 && command.dx === 0 && command.keys.length === 0);
+const yawOnly = commands.filter((command) => command.dx !== 0 && command.dy === 0);
+const pitchOnly = commands.filter((command) => command.dy !== 0 && command.dx === 0);
 
 const candidateExtractors = [
   ["viewPitch", (sample) => sample.viewPitchDegrees],

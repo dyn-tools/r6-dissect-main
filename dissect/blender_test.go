@@ -232,18 +232,18 @@ func TestRenderBlenderCameraScriptIncludesMetadataAndKeyframes(t *testing.T) {
 		PlayerNameGuess: "kds",
 		Samples: []MovementSample{
 			{
-				Offset:          10,
-				TimeInSeconds:   &timeValue,
-				Position:        &Vector3{X: 1, Y: 2, Z: 3},
-				Rotation:        &Vector3{X: 0.1, Y: 0.2, Z: 0.3},
-				RotationDegrees: &Vector3{X: 10, Y: 20, Z: 30},
+				Offset:                  10,
+				TimeInSeconds:           &timeValue,
+				Position:                &Vector3{X: 1, Y: 2, Z: 3},
+				Rotation:                &Vector3{X: 0.1, Y: 0.2, Z: 0.3},
+				RotationDegrees:         &Vector3{X: 10, Y: 20, Z: 30},
 				ViewingDirectionDegrees: &viewHeadingA,
 			},
 			{
-				Offset:          20,
-				Position:        &Vector3{X: 4, Y: 5, Z: 6},
-				Rotation:        &Vector3{X: 0.4, Y: 0.5, Z: 0.6},
-				RotationDegrees: &Vector3{X: 40, Y: 50, Z: 60},
+				Offset:                  20,
+				Position:                &Vector3{X: 4, Y: 5, Z: 6},
+				Rotation:                &Vector3{X: 0.4, Y: 0.5, Z: 0.6},
+				RotationDegrees:         &Vector3{X: 40, Y: 50, Z: 60},
 				ViewingDirectionDegrees: &viewHeadingB,
 			},
 		},
@@ -264,13 +264,14 @@ func TestRenderBlenderCameraScriptIncludesMetadataAndKeyframes(t *testing.T) {
 		"bounds = create_bounds_object(BOUNDS_NAME, BOUNDS_MIN, BOUNDS_MAX, collection)",
 		"rig = bpy.data.objects.new(RIG_NAME, None)",
 		"camera.parent = rig",
-		"camera.rotation_euler = (0, 0, 0)",
+		"camera.rotation_euler = (math.radians(90), 0, 0)",
 		"rig.location = (0.5, 1, 1.5)",
-		"rig.rotation_euler = (0, 0, 2.9670597283903604)",
+		"rig.rotation_euler = (0, 0, -2.96705972839036)",
 		"rig.keyframe_insert(data_path='location', frame=3)",
 		"keyframe_prop(rig, 'r6_sample_offset', 10, 1)",
 		"keyframe_prop(rig, 'r6_view_heading_deg', 170, 1)",
 		"keyframe_prop(rig, 'r6_view_heading_continuous_deg', 190, 3)",
+		"keyframe_prop(rig, 'r6_view_heading_smoothed_deg', -170, 1)",
 		"keyframe_prop(rig, 'r6_time_seconds', 12.5, 1)",
 		"rig['r6_position_prop'] = POSITION_PROP_ID",
 		"scene.frame_end = 3",
@@ -279,6 +280,42 @@ func TestRenderBlenderCameraScriptIncludesMetadataAndKeyframes(t *testing.T) {
 		if !strings.Contains(script, snippet) {
 			t.Fatalf("expected script to contain %q\n%s", snippet, script)
 		}
+	}
+}
+
+func TestBlenderSampleFramesUsesRecoveredTime(t *testing.T) {
+	t0 := 10.0
+	t1 := 9.5
+	t2 := 9.0
+	samples := []MovementSample{
+		{TimeInSeconds: &t0},
+		{TimeInSeconds: &t1},
+		{TimeInSeconds: &t2},
+	}
+	frames := blenderSampleFrames(samples, 30, 1)
+	expected := []int{1, 16, 31}
+	for i, want := range expected {
+		if frames[i] != want {
+			t.Fatalf("frame %d: expected %d, got %d", i, want, frames[i])
+		}
+	}
+}
+
+func TestBlenderSmoothScalarTimelineSuppressesSingleSampleSpike(t *testing.T) {
+	makePtr := func(v float64) *float64 { return &v }
+	values := []*float64{
+		makePtr(0),
+		makePtr(0),
+		makePtr(60),
+		makePtr(0),
+		makePtr(0),
+	}
+	smoothed := blenderSmoothScalarTimeline(values, 1, 0.5, false)
+	if smoothed[2] == nil {
+		t.Fatal("expected smoothed center value")
+	}
+	if math.Abs(*smoothed[2]) > 20 {
+		t.Fatalf("expected spike to be reduced substantially, got %f", *smoothed[2])
 	}
 }
 
@@ -318,12 +355,97 @@ func TestBlenderBaselinePitchRollUsesStableSample(t *testing.T) {
 	}
 
 	headings := blenderStableViewingHeadingContinuous(samples, 1)
-	pitch, roll := blenderBaselinePitchRoll(samples, normalizeBlenderCameraOptions(BlenderCameraOptions{}), headings, 1)
+	pitch, roll := blenderBaselinePitchRoll(samples, normalizeBlenderCameraOptions(BlenderCameraOptions{}), headings, nil, 1)
 	if math.Abs(pitch-degreesToRadians(15)) > 0.0001 {
 		t.Fatalf("expected baseline pitch from stable sample, got %f", pitch)
 	}
 	if math.Abs(roll-degreesToRadians(25)) > 0.0001 {
 		t.Fatalf("expected baseline roll from stable sample, got %f", roll)
+	}
+}
+
+func TestBlenderTrackWithDerivedTimelinesClearsRequestedAxes(t *testing.T) {
+	heading := 45.0
+	pitch := -20.0
+	track := MovementTrack{
+		Samples: []MovementSample{
+			{ViewingDirectionDegrees: &heading, ViewPitchDegrees: &pitch},
+			{ViewingDirectionDegrees: &heading, ViewPitchDegrees: &pitch},
+		},
+	}
+	derived := blenderTrackWithDerivedTimelines(track, map[int]float64{1: 90}, nil, true, false)
+	if derived.Samples[0].ViewingDirectionDegrees != nil {
+		t.Fatal("expected heading on untouched sample to be cleared")
+	}
+	if derived.Samples[1].ViewingDirectionDegrees == nil || math.Abs(*derived.Samples[1].ViewingDirectionDegrees-90) > 0.001 {
+		t.Fatalf("expected derived heading on sample 1, got %+v", derived.Samples[1].ViewingDirectionDegrees)
+	}
+	if derived.Samples[0].ViewPitchDegrees == nil || math.Abs(*derived.Samples[0].ViewPitchDegrees-pitch) > 0.001 {
+		t.Fatalf("expected pitch to remain untouched, got %+v", derived.Samples[0].ViewPitchDegrees)
+	}
+}
+
+func TestRenderBlenderCameraScriptVariantsIncludesCandidateMetadata(t *testing.T) {
+	viewHeading := 30.0
+	viewPitch := -10.0
+	timeValue := 5.0
+	track := MovementTrack{
+		ActorID:         "actor-b",
+		Label:           "P02",
+		PlayerNameGuess: "kds",
+		Samples: []MovementSample{
+			{
+				Offset:                  10,
+				TimeInSeconds:           &timeValue,
+				Position:                &Vector3{X: 1, Y: 2, Z: 3},
+				RotationDegrees:         &Vector3{X: 10, Y: 20, Z: 30},
+				ViewingDirectionDegrees: &viewHeading,
+				ViewPitchDegrees:        &viewPitch,
+			},
+		},
+	}
+	variants := []blenderCameraVariant{
+		{
+			Track:         track,
+			VariantKind:   "selected",
+			VariantLabel:  "Selected",
+			PrimaryCamera: true,
+		},
+		{
+			Track:        blenderTrackWithDerivedTimelines(track, map[int]float64{0: 90}, nil, true, false),
+			NameSuffix:   "Yaw01_test",
+			VariantKind:  "yaw-candidate",
+			VariantLabel: "Yaw Candidate 1",
+			Candidate: &MovementMacroTimelineCandidate{
+				Source:       "late-s16-integrated",
+				PropID:       "00000000479807f000000000",
+				ActorID:      "actor-b",
+				VectorOffset: 46,
+				Alignment:    "offset",
+				Transform:    "neg",
+				Score:        12.5,
+			},
+		},
+	}
+	script := renderBlenderCameraScriptVariants(MovementOutput{
+		PositionPropID: "pos-prop",
+		RotationPropID: "rot-prop",
+	}, variants, normalizeBlenderCameraOptions(BlenderCameraOptions{FPS: 60}))
+
+	expectedSnippets := []string{
+		"Imported R6 compare camera variants into Blender",
+		"rig['r6_variant_kind'] = \"selected\"",
+		"rig['r6_variant_kind'] = \"yaw-candidate\"",
+		"rig['r6_variant_label'] = \"Yaw Candidate 1\"",
+		"rig['r6_candidate_source'] = \"late-s16-integrated\"",
+		"rig['r6_candidate_prop'] = \"00000000479807f000000000\"",
+		"rig['r6_candidate_vector_offset'] = 46",
+		"scene.camera = camera",
+	}
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(script, snippet) {
+			t.Fatalf("expected compare script to contain %q\n%s", snippet, script)
+		}
 	}
 }
 

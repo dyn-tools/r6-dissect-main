@@ -1623,7 +1623,7 @@ func TestMovementApplyDerivedViewingDirectionsKeepsGoodDerivedTimeline(t *testin
 		},
 	}
 	derived := map[int]float64{0: -10, 1: 15, 2: 45, 3: 90}
-	ordered, _ := movementApplyDerivedViewingDirections([]MovementTrack{track}, []MovementTrack{{ActorID: actorID}}, movementDirectionSearchResult{derivedByActor: map[string]map[int]float64{actorID: derived}})
+	ordered, _ := movementApplyDerivedViewingDirections([]MovementTrack{track}, []MovementTrack{{ActorID: actorID}}, movementDirectionSearchResult{derivedByActor: map[string]map[int]float64{actorID: derived}}, nil)
 	for index, want := range []float64{-10, 15, 45, 90} {
 		got := ordered[0].Samples[index].ViewingDirectionDegrees
 		if got == nil || math.Abs(*got-want) > 0.001 {

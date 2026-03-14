@@ -1,0 +1,96 @@
+{
+  "mode": "timeline",
+  "meta": {
+    "purpose": "Walking forward, pitch-only isolation replay",
+    "notes": [
+      "Run solo.",
+      "Do not touch mouse or keyboard outside the macro.",
+      "Start on flat ground with enough space to walk forward."
+    ],
+    "pitchCalibration": {
+      "smallStepDots": 480,
+      "mediumStepDots": 960
+    }
+  },
+  "commands": [
+    {
+      "label": "Walk forward",
+      "type": "holdkey",
+      "keys": ["w"],
+      "at": "2000ms",
+      "duration": "7000ms"
+    },
+    {
+      "label": "Walk pitch up small",
+      "type": "mousemove",
+      "at": "2400ms",
+      "dx": 0,
+      "dy": -480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk pitch up small",
+      "type": "mousemove",
+      "at": "3200ms",
+      "dx": 0,
+      "dy": -480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk pitch up small",
+      "type": "mousemove",
+      "at": "4000ms",
+      "dx": 0,
+      "dy": -480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk pitch up small",
+      "type": "mousemove",
+      "at": "4800ms",
+      "dx": 0,
+      "dy": -480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk pitch down small",
+      "type": "mousemove",
+      "at": "6200ms",
+      "dx": 0,
+      "dy": 480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk pitch down small",
+      "type": "mousemove",
+      "at": "7000ms",
+      "dx": 0,
+      "dy": 480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk pitch down small",
+      "type": "mousemove",
+      "at": "7800ms",
+      "dx": 0,
+      "dy": 480,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk pitch down small",
+      "type": "mousemove",
+      "at": "8600ms",
+      "dx": 0,
+      "dy": 480,
+      "duration": "260ms",
+      "easing": "linear"
+    }
+  ]
+}

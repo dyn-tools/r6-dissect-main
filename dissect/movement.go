@@ -79,6 +79,7 @@ type MovementOutput struct {
 	Usage                  *MovementUsage           `json:"usage,omitempty"`
 	Validation             *MovementValidation      `json:"validation,omitempty"`
 	DirectionSearch        *MovementDirectionSearch `json:"directionSearch,omitempty"`
+	MacroSearch            *MovementMacroSearch     `json:"macroSearch,omitempty"`
 	PositionPropID         string                   `json:"positionPropID,omitempty"`
 	RotationPropID         string                   `json:"rotationPropID,omitempty"`
 	PositionPropCandidates []MovementPropCandidate  `json:"positionPropCandidates,omitempty"`
@@ -150,7 +151,9 @@ func (r *Reader) MovementDataOptions(options MovementOptions) MovementOutput {
 	ordered, primary = movementAutoTuneSinglePlayerRotation(r.Header, r.MatchFeedback, r.b, r.offset, selection.positionProp, selection.rotationProp, zeroActorPrefixes, ordered, primary)
 	ordered, primary, clock := movementAttachRecoveredClock(r.Header.CodeVersion, r.b, ordered, primary)
 	direction := movementDirectionSearchWithDerived(r.Header, r.b, r.offset, zeroActorPrefixes, primary)
-	ordered, primary = movementApplyDerivedViewingDirections(ordered, primary, direction)
+	macroSearch := movementMacroSearchWithSidecar(options, r.Header, r.b, r.offset, zeroActorPrefixes, primary)
+	direction = movementMergeMacroSearch(direction, macroSearch, primary)
+	ordered, primary = movementApplyDerivedViewingDirections(ordered, primary, direction, macroSearch.summary)
 	validation := movementValidation(primary)
 	return MovementOutput{
 		Header:                 r.Header,
@@ -160,6 +163,7 @@ func (r *Reader) MovementDataOptions(options MovementOptions) MovementOutput {
 		Usage:                  movementUsageStats(r.Header.CodeVersion, r.b, r.offset, zeroActorPrefixes, selection.positionProp, selection.rotationProp, ordered, primary, direction),
 		Validation:             validation,
 		DirectionSearch:        direction.summary,
+		MacroSearch:            macroSearch.summary,
 		PositionPropID:         hex.EncodeToString(selection.positionProp),
 		RotationPropID:         hex.EncodeToString(selection.rotationProp),
 		PositionPropCandidates: selection.positionCandidates,
@@ -167,7 +171,7 @@ func (r *Reader) MovementDataOptions(options MovementOptions) MovementOutput {
 	}
 }
 
-func movementApplyDerivedViewingDirections(ordered []MovementTrack, primary []MovementTrack, direction movementDirectionSearchResult) ([]MovementTrack, []MovementTrack) {
+func movementApplyDerivedViewingDirections(ordered []MovementTrack, primary []MovementTrack, direction movementDirectionSearchResult, macroSummary *MovementMacroSearch) ([]MovementTrack, []MovementTrack) {
 	primaryActors := map[string]bool{}
 	for _, track := range primary {
 		primaryActors[track.ActorID] = true
@@ -214,9 +218,13 @@ func movementApplyDerivedViewingDirections(ordered []MovementTrack, primary []Mo
 			}
 		}
 		if len(primaryActors) == 1 && primaryActors[ordered[trackIndex].ActorID] {
-			movementRotationFitViewingDirection(&ordered[trackIndex], hadDerived, derivedCount)
+			if macroSummary == nil {
+				movementRotationFitViewingDirection(&ordered[trackIndex], hadDerived, derivedCount)
+			}
 			if !hadPitchDerived {
-				movementAttachExperimentalViewPitch(&ordered[trackIndex])
+				if macroSummary == nil || macroSummary.BestPitch != nil {
+					movementAttachExperimentalViewPitch(&ordered[trackIndex])
+				}
 			}
 		}
 	}

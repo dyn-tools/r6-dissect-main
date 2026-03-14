@@ -42,7 +42,7 @@ function parseMs(value) {
 }
 
 function normalizeCommands(commands) {
-  return commands.map((command, index) => {
+  const normalized = commands.map((command, index) => {
     const startMs = parseMs(command.at ?? 0);
     const durationMs = parseMs(command.duration ?? 0);
     const endMs = startMs + durationMs;
@@ -65,12 +65,74 @@ function normalizeCommands(commands) {
       keys,
     };
   });
+  const movementIntervals = normalized
+    .filter((command) => command.keys.some((key) => ["w", "a", "s", "d", "shift", "ctrl", "space"].includes(String(key).toLowerCase())))
+    .map((command) => ({ startMs: command.startMs, endMs: command.endMs }));
+  const mouseIntervals = [];
+  const windows = normalized.map((command) => ({
+    ...command,
+    movementActive: movementIntervals.some((interval) => !(interval.endMs < command.startMs || interval.startMs > command.endMs)),
+  })).flatMap((command) => {
+    if (command.type !== "mousemove") {
+      return [];
+    }
+    mouseIntervals.push({ startMs: command.startMs, endMs: command.endMs });
+    return [command];
+  });
+  let moveIndex = 0;
+  for (const movement of movementIntervals) {
+    let segments = [movement];
+    for (const mouse of mouseIntervals) {
+      const next = [];
+      for (const segment of segments) {
+        if (mouse.endMs <= segment.startMs || mouse.startMs >= segment.endMs) {
+          next.push(segment);
+          continue;
+        }
+        if (mouse.startMs > segment.startMs) {
+          next.push({ startMs: segment.startMs, endMs: Math.min(mouse.startMs, segment.endMs) });
+        }
+        if (mouse.endMs < segment.endMs) {
+          next.push({ startMs: Math.max(mouse.endMs, segment.startMs), endMs: segment.endMs });
+        }
+      }
+      segments = next;
+    }
+    for (const segment of segments) {
+      if ((segment.endMs - segment.startMs) < 150) {
+        continue;
+      }
+      moveIndex += 1;
+      windows.push({
+        index: normalized.length + moveIndex,
+        label: `move-${moveIndex}`,
+        type: "holdkey",
+        startMs: segment.startMs,
+        endMs: segment.endMs,
+        durationMs: segment.endMs - segment.startMs,
+        dx: 0,
+        dy: 0,
+        keys: ["w"],
+        movementActive: true,
+      });
+    }
+  }
+  return windows.sort((left, right) => left.startMs - right.startMs || left.endMs - right.endMs);
 }
 
 function classifyWindow(command) {
   const hasHorizontalMouse = command.dx !== 0 && command.dy === 0;
   const hasVerticalMouse = command.dy !== 0 && command.dx === 0;
   const hasMovement = command.keys.some((key) => ["w", "a", "s", "d", "shift", "ctrl"].includes(String(key).toLowerCase()));
+  if (command.type === "mousemove" && hasHorizontalMouse && command.movementActive) {
+    return "move+yaw";
+  }
+  if (command.type === "mousemove" && hasVerticalMouse && command.movementActive) {
+    return "move+pitch";
+  }
+  if (command.type === "mousemove" && command.dx !== 0 && command.dy !== 0 && command.movementActive) {
+    return "move+combined";
+  }
   if (command.type === "mousemove" && hasHorizontalMouse && !hasMovement) {
     return "yaw-only";
   }

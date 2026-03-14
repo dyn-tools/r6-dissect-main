@@ -1,0 +1,99 @@
+{
+  "mode": "timeline",
+  "meta": {
+    "purpose": "Walking forward, yaw-only isolation replay",
+    "notes": [
+      "Run solo.",
+      "Do not touch mouse or keyboard outside the macro.",
+      "Start on flat ground with enough space to walk forward."
+    ],
+    "yawCalibration": {
+      "full360DotsSigned": 8670,
+      "full360Dots": 8670,
+      "half180Dots": 4335,
+      "quarter90Dots": 2168,
+      "eighth45Dots": 1084
+    }
+  },
+  "commands": [
+    {
+      "label": "Walk forward",
+      "type": "holdkey",
+      "keys": ["w"],
+      "at": "2000ms",
+      "duration": "7000ms"
+    },
+    {
+      "label": "Walk yaw right 45",
+      "type": "mousemove",
+      "at": "2400ms",
+      "dx": 1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk yaw right 45",
+      "type": "mousemove",
+      "at": "3200ms",
+      "dx": 1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk yaw right 45",
+      "type": "mousemove",
+      "at": "4000ms",
+      "dx": 1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk yaw right 45",
+      "type": "mousemove",
+      "at": "4800ms",
+      "dx": 1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk yaw left 45",
+      "type": "mousemove",
+      "at": "6200ms",
+      "dx": -1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk yaw left 45",
+      "type": "mousemove",
+      "at": "7000ms",
+      "dx": -1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk yaw left 45",
+      "type": "mousemove",
+      "at": "7800ms",
+      "dx": -1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    },
+    {
+      "label": "Walk yaw left 45",
+      "type": "mousemove",
+      "at": "8600ms",
+      "dx": -1084,
+      "dy": 0,
+      "duration": "260ms",
+      "easing": "linear"
+    }
+  ]
+}
