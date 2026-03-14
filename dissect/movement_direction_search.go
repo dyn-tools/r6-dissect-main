@@ -606,6 +606,13 @@ func movementDirectionBestProjectedTimeline(track MovementTrack, candidates []Mo
 			bestScore = score
 		}
 	}
+	if timeline, ok := movementDirectionProjectImplicitQuaternionTimeline(track); ok {
+		score := movementDirectionProjectedTimelineScore(track, timeline, nil, stationary, anchorTimeline) + 12
+		if score > bestScore {
+			bestTimeline = timeline
+			bestScore = score
+		}
+	}
 	if bestTimeline == nil {
 		return nil, false
 	}
@@ -793,6 +800,37 @@ func movementDirectionProjectedPitchTimelineScore(track MovementTrack, yawTimeli
 		score -= 0.5
 	}
 	return score
+}
+
+func movementDirectionProjectImplicitQuaternionTimeline(track MovementTrack) (map[int]float64, bool) {
+	if len(track.Samples) == 0 {
+		return nil, false
+	}
+	out := map[int]float64{}
+	for sampleIndex, sample := range track.Samples {
+		if sample.Rotation == nil {
+			continue
+		}
+		qx := float64(sample.Rotation.X)
+		qy := float64(sample.Rotation.Y)
+		qz := float64(sample.Rotation.Z)
+		ww := 1 - ((qx * qx) + (qy * qy) + (qz * qz))
+		if ww < 0 {
+			if ww > -0.01 {
+				ww = 0
+			} else {
+				continue
+			}
+		}
+		quat := movementQuaternion{X: float32(qx), Y: float32(qy), Z: float32(qz), W: float32(math.Sqrt(ww))}
+		world := movementRotateVector(quat, Vector3{Z: 1})
+		heading := math.Atan2(float64(world.Y), float64(world.X)) * 180 / math.Pi
+		out[sampleIndex] = movementWrapDegrees(heading)
+	}
+	if movementPercent(len(out), len(track.Samples)) < 50 {
+		return nil, false
+	}
+	return out, true
 }
 
 func movementDirectionProjectedTimelineScore(track MovementTrack, timeline map[int]float64, candidate *MovementDirectionCandidate, stationary map[int]bool, anchorTimeline map[int]float64) float64 {
@@ -1448,6 +1486,110 @@ func movementDirectionForwardAxes() []struct {
 func movementQuaternionForwardAngle(quat movementQuaternion, axis Vector3) float64 {
 	world := movementRotateVector(quat, axis)
 	return math.Atan2(float64(world.Y), float64(world.X)) * 180 / math.Pi
+}
+
+func movementQuaternionForwardPitchAngle(quat movementQuaternion, axis Vector3) float64 {
+	world := movementRotateVector(quat, axis)
+	return math.Atan2(float64(world.Z), math.Hypot(float64(world.X), float64(world.Y))) * 180 / math.Pi
+}
+
+func movementDirectionQuaternionPitchStreams(header Header, buf []byte, start int, zeroActorPrefixes map[string]int, allowedProps map[string]bool, clockEntries []movementClockEntry) []movementDirectionStream {
+	minSamples := movementDirectionMinSampleCount(header)
+	type streamKey struct {
+		source  string
+		propID  string
+		actorID string
+		offset  int
+		model   string
+		forward string
+	}
+	streams := map[streamKey][]movementDirectionAngleSample{}
+	models := movementImplicitQuaternionModels()
+	windowModels := make([]movementImplicitQuaternionModel, 0, len(models))
+	for _, model := range models {
+		if model.mode == "implicit_w" {
+			windowModels = append(windowModels, model)
+		}
+	}
+	for i := start; i < len(buf); i++ {
+		candidate, ok := movementCandidateRecordAtCodeVersion(header.CodeVersion, buf, i, zeroActorPrefixes)
+		if !ok || !movementPropPatternAllowed(header.CodeVersion, candidate.prop) {
+			continue
+		}
+		if header.CodeVersion >= Y11S1Alpha3 && movementY11CandidateIsPosition(candidate) {
+			continue
+		}
+		propID := hex.EncodeToString(candidate.prop)
+		if len(allowedProps) > 0 && !allowedProps[propID] {
+			continue
+		}
+		actorID := hex.EncodeToString(candidate.actor)
+		if candidate.hasQuaternion {
+			for _, forward := range movementDirectionForwardAxes() {
+				angle := movementQuaternionForwardPitchAngle(candidate.quaternion, forward.axis)
+				key := streamKey{source: "quat-22-pitch", propID: propID, actorID: actorID, offset: 22, model: "xyzw", forward: forward.name}
+				streams[key] = append(streams[key], movementDirectionAngleSampleAtOffset(i, angle, clockEntries))
+			}
+		}
+		if candidate.hasSecondary && movementVectorLooksImplicitQuaternionXYZ(candidate.secondary) && movementVectorLooksZeroLike(candidate.primary, 0.1) {
+			for _, model := range models {
+				quat, ok := movementY11CandidateQuaternionWithModel(candidate, model)
+				if !ok {
+					continue
+				}
+				modelKey := movementImplicitQuaternionModelKey(model)
+				for _, forward := range movementDirectionForwardAxes() {
+					angle := movementQuaternionForwardPitchAngle(quat, forward.axis)
+					key := streamKey{source: "quat-secondary-pitch", propID: propID, actorID: actorID, offset: 31, model: modelKey, forward: forward.name}
+					streams[key] = append(streams[key], movementDirectionAngleSampleAtOffset(i, angle, clockEntries))
+				}
+			}
+		}
+		for rel := 22; rel <= 31; rel++ {
+			value, ok := movementVectorAt(buf, i+rel)
+			if !ok || !movementVectorLooksImplicitQuaternionXYZ(value) {
+				continue
+			}
+			windowCandidate := movementCandidate{
+				primary:      Vector3{},
+				secondary:    value,
+				hasSecondary: true,
+			}
+			for _, model := range windowModels {
+				quat, ok := movementY11CandidateQuaternionWithModel(windowCandidate, model)
+				if !ok {
+					continue
+				}
+				modelKey := movementImplicitQuaternionModelKey(model)
+				for _, forward := range movementDirectionForwardAxes() {
+					angle := movementQuaternionForwardPitchAngle(quat, forward.axis)
+					key := streamKey{source: "quat-window-pitch", propID: propID, actorID: actorID, offset: rel, model: modelKey, forward: forward.name}
+					streams[key] = append(streams[key], movementDirectionAngleSampleAtOffset(i, angle, clockEntries))
+				}
+			}
+		}
+		if header.CodeVersion < Y11S1Alpha3 {
+			i += 37
+		}
+	}
+	out := make([]movementDirectionStream, 0, len(streams))
+	for key, samples := range streams {
+		if len(samples) < minSamples {
+			continue
+		}
+		out = append(out, movementDirectionStream{
+			source:       key.source + ":" + key.model,
+			propID:       key.propID,
+			actorID:      key.actorID,
+			vectorOffset: key.offset,
+			axisA:        key.forward,
+			samples:      samples,
+		})
+	}
+	if len(header.Players) == 1 {
+		return movementDirectionFinalizeSoloScalarStreams(out, minSamples)
+	}
+	return out
 }
 
 func movementDirectionInt16Streams(header Header, buf []byte, start int, zeroActorPrefixes map[string]int, allowedProps map[string]bool, clockEntries []movementClockEntry) []movementDirectionStream {
